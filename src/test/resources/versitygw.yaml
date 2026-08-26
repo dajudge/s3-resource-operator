@@ -12,6 +12,16 @@ spec:
       labels:
         app: versitygw
     spec:
+      initContainers:
+        - name: init-data
+          image: busybox:1.37
+          command:
+            - sh
+            - -c
+            - mkdir -p /data/s3 /data/iam
+          volumeMounts:
+            - name: data
+              mountPath: /data
       containers:
         - name: versitygw
           image: ghcr.io/versity/versitygw:v1.4.1
