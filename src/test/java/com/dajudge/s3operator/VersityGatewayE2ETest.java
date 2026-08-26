@@ -20,7 +20,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 
 import static io.fabric8.kubernetes.client.Config.fromKubeconfig;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -47,7 +47,7 @@ class VersityGatewayE2ETest {
             client.apps().deployments()
                     .inNamespace("default")
                     .withName("versitygw")
-                    .waitUntilReady(Duration.ofMinutes(2));
+                    .waitUntilReady(2, TimeUnit.MINUTES);
 
             try (LocalPortForward portForward = client.services()
                     .inNamespace("default")
