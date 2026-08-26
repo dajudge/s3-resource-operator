@@ -25,55 +25,91 @@ import static org.awaitility.Awaitility.await;
 class VersityProviderE2ETest {
     private static final String ROOT_ACCESS = "test-root-access";
     private static final String ROOT_SECRET = "test-root-secret";
-    private static final String ACCESS = "provider-drift-user";
-    private static final String INITIAL_SECRET = "provider-initial-secret";
-    private static final String ROTATED_SECRET = "provider-rotated-secret";
-    private static final String BUCKET = "provider-drift-bucket";
 
     @ConfigProperty(name = "test.s3.endpoint")
     String endpoint;
 
     @Test
     void convergesExistingUserSecretAndRole() {
+        String access = "provider-drift-user";
+        String initialSecret = "provider-initial-secret";
+        String rotatedSecret = "provider-rotated-secret";
+        String bucket = "provider-drift-bucket";
         VersityS3Provider provider = new VersityS3Provider();
 
-        provider.createUser(endpoint, ROOT_ACCESS, ROOT_SECRET, ACCESS, INITIAL_SECRET, "user");
-        provider.createBucket(endpoint, ROOT_ACCESS, ROOT_SECRET, BUCKET, ACCESS);
+        provider.createUser(endpoint, ROOT_ACCESS, ROOT_SECRET, access, initialSecret, "user");
+        provider.createBucket(endpoint, ROOT_ACCESS, ROOT_SECRET, bucket, access);
 
-        try (S3Client initial = s3(INITIAL_SECRET)) {
-            await().atMost(Duration.ofSeconds(30)).ignoreExceptions().untilAsserted(() ->
-                    initial.headBucket(HeadBucketRequest.builder().bucket(BUCKET).build()));
+        try (S3Client initial = s3(access, initialSecret)) {
+            awaitAccessible(initial, bucket);
         }
 
-        provider.createUser(endpoint, ROOT_ACCESS, ROOT_SECRET, ACCESS, ROTATED_SECRET, "admin");
+        provider.createUser(endpoint, ROOT_ACCESS, ROOT_SECRET, access, rotatedSecret, "admin");
 
-        try (S3Client rotated = s3(ROTATED_SECRET)) {
-            await().atMost(Duration.ofSeconds(30)).ignoreExceptions().untilAsserted(() ->
-                    rotated.headBucket(HeadBucketRequest.builder().bucket(BUCKET).build()));
+        try (S3Client rotated = s3(access, rotatedSecret)) {
+            awaitAccessible(rotated, bucket);
         }
 
-        try (S3Client stale = s3(INITIAL_SECRET)) {
+        try (S3Client stale = s3(access, initialSecret)) {
             await().atMost(Duration.ofSeconds(30)).untilAsserted(() ->
-                    assertThat(credentialsRejected(stale)).isTrue());
+                    assertThat(credentialsRejected(stale, bucket)).isTrue());
         } finally {
-            provider.deleteBucket(endpoint, ROOT_ACCESS, ROOT_SECRET, BUCKET);
-            provider.deleteUser(endpoint, ROOT_ACCESS, ROOT_SECRET, ACCESS);
+            provider.deleteBucket(endpoint, ROOT_ACCESS, ROOT_SECRET, bucket);
+            provider.deleteUser(endpoint, ROOT_ACCESS, ROOT_SECRET, access);
         }
     }
 
-    private S3Client s3(String secret) {
+    @Test
+    void convergesExistingBucketOwner() {
+        String firstAccess = "provider-owner-a";
+        String firstSecret = "provider-owner-a-secret";
+        String secondAccess = "provider-owner-b";
+        String secondSecret = "provider-owner-b-secret";
+        String bucket = "provider-owner-drift-bucket";
+        VersityS3Provider provider = new VersityS3Provider();
+
+        provider.createUser(endpoint, ROOT_ACCESS, ROOT_SECRET, firstAccess, firstSecret, "user");
+        provider.createUser(endpoint, ROOT_ACCESS, ROOT_SECRET, secondAccess, secondSecret, "user");
+        provider.createBucket(endpoint, ROOT_ACCESS, ROOT_SECRET, bucket, firstAccess);
+
+        try (S3Client firstOwner = s3(firstAccess, firstSecret)) {
+            awaitAccessible(firstOwner, bucket);
+        }
+
+        provider.createBucket(endpoint, ROOT_ACCESS, ROOT_SECRET, bucket, secondAccess);
+
+        try (S3Client secondOwner = s3(secondAccess, secondSecret)) {
+            awaitAccessible(secondOwner, bucket);
+        }
+
+        try (S3Client formerOwner = s3(firstAccess, firstSecret)) {
+            await().atMost(Duration.ofSeconds(30)).untilAsserted(() ->
+                    assertThat(credentialsRejected(formerOwner, bucket)).isTrue());
+        } finally {
+            provider.deleteBucket(endpoint, ROOT_ACCESS, ROOT_SECRET, bucket);
+            provider.deleteUser(endpoint, ROOT_ACCESS, ROOT_SECRET, firstAccess);
+            provider.deleteUser(endpoint, ROOT_ACCESS, ROOT_SECRET, secondAccess);
+        }
+    }
+
+    private S3Client s3(String access, String secret) {
         return S3Client.builder()
                 .endpointOverride(URI.create(endpoint))
                 .region(Region.US_EAST_1)
-                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(ACCESS, secret)))
+                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(access, secret)))
                 .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
                 .httpClientBuilder(UrlConnectionHttpClient.builder())
                 .build();
     }
 
-    private static boolean credentialsRejected(S3Client s3) {
+    private static void awaitAccessible(S3Client s3, String bucket) {
+        await().atMost(Duration.ofSeconds(30)).ignoreExceptions().untilAsserted(() ->
+                s3.headBucket(HeadBucketRequest.builder().bucket(bucket).build()));
+    }
+
+    private static boolean credentialsRejected(S3Client s3, String bucket) {
         try {
-            s3.headBucket(HeadBucketRequest.builder().bucket(BUCKET).build());
+            s3.headBucket(HeadBucketRequest.builder().bucket(bucket).build());
             return false;
         } catch (S3Exception e) {
             return e.statusCode() == 401 || e.statusCode() == 403;
