@@ -5,6 +5,7 @@ import com.dajudge.s3operator.api.S3Bucket;
 import com.dajudge.s3operator.api.S3User;
 import com.dajudge.s3operator.api.S3UserStatus;
 import com.dajudge.s3operator.provider.VersityS3Provider;
+import io.fabric8.kubernetes.api.model.Condition;
 import io.fabric8.kubernetes.api.model.ConditionBuilder;
 import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.api.model.SecretBuilder;
@@ -41,9 +42,7 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
         S3Backend backend = requireBackend(namespace, user.getSpec().getBackendRef());
         Secret adminSecret = requireAdminSecret(namespace, backend);
 
-        String secretName = user.getSpec().getSecretName() == null || user.getSpec().getSecretName().isBlank()
-                ? user.getMetadata().getName() + "-s3"
-                : user.getSpec().getSecretName();
+        String secretName = secretName(user);
         Secret credentials = client.secrets().inNamespace(namespace).withName(secretName).get();
         if (credentials == null) {
             String accessKey = namespace + "." + user.getMetadata().getName();
@@ -75,6 +74,7 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
                 accessKey, secretKey, user.getSpec().getRole());
 
         S3UserStatus status = user.getStatus() == null ? new S3UserStatus() : user.getStatus();
+        String transitionTime = readyTransitionTime(status.getConditions());
         status.setAccessKeyId(accessKey);
         status.setSecretName(secretName);
         status.setObservedGeneration(user.getMetadata().getGeneration());
@@ -84,7 +84,7 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
                 .withReason("Reconciled")
                 .withMessage("Versity user and credentials are ready")
                 .withObservedGeneration(user.getMetadata().getGeneration())
-                .withLastTransitionTime(Instant.now().toString())
+                .withLastTransitionTime(transitionTime)
                 .build()));
         user.setStatus(status);
         return UpdateControl.patchStatus(user);
@@ -103,16 +103,28 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
             throw new IllegalStateException("S3User is still referenced by an S3Bucket: " + user.getMetadata().getName());
         }
 
-        S3Backend backend = requireBackend(namespace, user.getSpec().getBackendRef());
-        Secret adminSecret = requireAdminSecret(namespace, backend);
-        String secretName = user.getSpec().getSecretName() == null || user.getSpec().getSecretName().isBlank()
-                ? user.getMetadata().getName() + "-s3"
-                : user.getSpec().getSecretName();
-        Secret credentials = client.secrets().inNamespace(namespace).withName(secretName).get();
-        if (credentials != null) {
+        S3Backend backend = client.resources(S3Backend.class)
+                .inNamespace(namespace)
+                .withName(user.getSpec().getBackendRef())
+                .get();
+        if (backend == null || !provider.type().equals(backend.getSpec().getProvider())) {
+            return DeleteControl.defaultDelete();
+        }
+
+        Secret adminSecret = client.secrets().inNamespace(namespace)
+                .withName(backend.getSpec().getAdminCredentialsSecretRef().getName())
+                .get();
+        if (adminSecret == null) {
+            return DeleteControl.defaultDelete();
+        }
+
+        Secret credentials = client.secrets().inNamespace(namespace).withName(secretName(user)).get();
+        String accessKey = credentials != null
+                ? secretValue(credentials, "accessKey")
+                : user.getStatus() == null ? null : user.getStatus().getAccessKeyId();
+        if (accessKey != null && !accessKey.isBlank()) {
             provider.deleteUser(backend.getSpec().getEndpoint(),
-                    secretValue(adminSecret, "accessKey"), secretValue(adminSecret, "secretKey"),
-                    secretValue(credentials, "accessKey"));
+                    secretValue(adminSecret, "accessKey"), secretValue(adminSecret, "secretKey"), accessKey);
         }
         return DeleteControl.defaultDelete();
     }
@@ -139,6 +151,24 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
             throw new IllegalStateException("Admin credentials Secret not found");
         }
         return adminSecret;
+    }
+
+    private static String secretName(S3User user) {
+        return user.getSpec().getSecretName() == null || user.getSpec().getSecretName().isBlank()
+                ? user.getMetadata().getName() + "-s3"
+                : user.getSpec().getSecretName();
+    }
+
+    private static String readyTransitionTime(List<Condition> conditions) {
+        if (conditions != null) {
+            for (Condition condition : conditions) {
+                if ("Ready".equals(condition.getType()) && "True".equals(condition.getStatus())
+                        && condition.getLastTransitionTime() != null) {
+                    return condition.getLastTransitionTime();
+                }
+            }
+        }
+        return Instant.now().toString();
     }
 
     private static String secretValue(Secret secret, String key) {
