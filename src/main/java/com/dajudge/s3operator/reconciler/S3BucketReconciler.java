@@ -1,24 +1,31 @@
 package com.dajudge.s3operator.reconciler;
 
 import com.dajudge.s3operator.api.S3Bucket;
+import com.dajudge.s3operator.api.S3BucketSpec;
+import com.dajudge.s3operator.api.S3BucketStatus;
 import com.dajudge.s3operator.api.S3Instance;
 import com.dajudge.s3operator.api.S3User;
 import com.dajudge.s3operator.provider.VersityS3Provider;
+import io.fabric8.kubernetes.api.model.ConditionBuilder;
 import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.client.KubernetesClient;
+import io.javaoperatorsdk.operator.api.reconciler.Cleaner;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.api.reconciler.ControllerConfiguration;
+import io.javaoperatorsdk.operator.api.reconciler.DeleteControl;
 import io.javaoperatorsdk.operator.api.reconciler.Reconciler;
 import io.javaoperatorsdk.operator.api.reconciler.UpdateControl;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Base64;
+import java.util.List;
 
 @ApplicationScoped
 @ControllerConfiguration
-public class S3BucketReconciler implements Reconciler<S3Bucket> {
+public class S3BucketReconciler implements Reconciler<S3Bucket>, Cleaner<S3Bucket> {
 
     @Inject
     KubernetesClient client;
@@ -29,48 +36,93 @@ public class S3BucketReconciler implements Reconciler<S3Bucket> {
     @Override
     public UpdateControl<S3Bucket> reconcile(S3Bucket bucket, Context<S3Bucket> context) {
         String namespace = bucket.getMetadata().getNamespace();
+        S3Instance instance = requireInstance(namespace, bucket.getSpec().getInstanceRef());
+        S3User user = requireUser(namespace, bucket.getSpec().getUserRef());
+        Secret userSecret = requireUserSecret(namespace, user);
+        Secret adminSecret = requireAdminSecret(namespace, instance);
+
+        String bucketName = bucketName(bucket);
+        provider.createBucket(instance.getSpec().getEndpoint(),
+                secretValue(adminSecret, "accessKey"), secretValue(adminSecret, "secretKey"),
+                bucketName, secretValue(userSecret, "accessKey"));
+
+        S3BucketStatus status = bucket.getStatus() == null ? new S3BucketStatus() : bucket.getStatus();
+        status.setObservedGeneration(bucket.getMetadata().getGeneration());
+        status.setConditions(List.of(new ConditionBuilder()
+                .withType("Ready")
+                .withStatus("True")
+                .withReason("Reconciled")
+                .withMessage("Versity bucket is ready")
+                .withObservedGeneration(bucket.getMetadata().getGeneration())
+                .withLastTransitionTime(Instant.now().toString())
+                .build()));
+        bucket.setStatus(status);
+        return UpdateControl.patchStatus(bucket);
+    }
+
+    @Override
+    public DeleteControl cleanup(S3Bucket bucket, Context<S3Bucket> context) {
+        if (bucket.getSpec().getDeletionPolicy() == S3BucketSpec.DeletionPolicy.DELETE) {
+            String namespace = bucket.getMetadata().getNamespace();
+            S3Instance instance = requireInstance(namespace, bucket.getSpec().getInstanceRef());
+            Secret adminSecret = requireAdminSecret(namespace, instance);
+            provider.deleteBucket(instance.getSpec().getEndpoint(),
+                    secretValue(adminSecret, "accessKey"), secretValue(adminSecret, "secretKey"),
+                    bucketName(bucket));
+        }
+        return DeleteControl.defaultDelete();
+    }
+
+    private S3Instance requireInstance(String namespace, String name) {
         S3Instance instance = client.resources(S3Instance.class)
                 .inNamespace(namespace)
-                .withName(bucket.getSpec().getInstanceRef())
+                .withName(name)
                 .get();
         if (instance == null) {
-            throw new IllegalStateException("S3Instance not found: " + bucket.getSpec().getInstanceRef());
+            throw new IllegalStateException("S3Instance not found: " + name);
         }
         if (!provider.type().equals(instance.getSpec().getProvider())) {
             throw new IllegalStateException("Unsupported S3 provider: " + instance.getSpec().getProvider());
         }
+        return instance;
+    }
 
-        S3User owner = client.resources(S3User.class)
+    private S3User requireUser(String namespace, String name) {
+        S3User user = client.resources(S3User.class)
                 .inNamespace(namespace)
-                .withName(bucket.getSpec().getOwnerRef())
+                .withName(name)
                 .get();
-        if (owner == null) {
-            throw new IllegalStateException("S3User not found: " + bucket.getSpec().getOwnerRef());
+        if (user == null) {
+            throw new IllegalStateException("S3User not found: " + name);
         }
+        return user;
+    }
 
-        String ownerSecretName = owner.getSpec().getSecretName() == null || owner.getSpec().getSecretName().isBlank()
-                ? owner.getMetadata().getName() + "-s3"
-                : owner.getSpec().getSecretName();
-        Secret ownerSecret = client.secrets().inNamespace(namespace).withName(ownerSecretName).get();
-        if (ownerSecret == null) {
-            throw new IllegalStateException("Owner credentials Secret not found: " + ownerSecretName);
+    private Secret requireUserSecret(String namespace, S3User user) {
+        String secretName = user.getSpec().getSecretName() == null || user.getSpec().getSecretName().isBlank()
+                ? user.getMetadata().getName() + "-s3"
+                : user.getSpec().getSecretName();
+        Secret secret = client.secrets().inNamespace(namespace).withName(secretName).get();
+        if (secret == null) {
+            throw new IllegalStateException("User credentials Secret not found: " + secretName);
         }
+        return secret;
+    }
 
-        Secret adminSecret = client.secrets().inNamespace(namespace)
+    private Secret requireAdminSecret(String namespace, S3Instance instance) {
+        Secret secret = client.secrets().inNamespace(namespace)
                 .withName(instance.getSpec().getAdminCredentialsSecretRef().getName())
                 .get();
-        if (adminSecret == null) {
+        if (secret == null) {
             throw new IllegalStateException("Admin credentials Secret not found");
         }
+        return secret;
+    }
 
-        String bucketName = bucket.getSpec().getBucketName() == null || bucket.getSpec().getBucketName().isBlank()
+    private static String bucketName(S3Bucket bucket) {
+        return bucket.getSpec().getBucketName() == null || bucket.getSpec().getBucketName().isBlank()
                 ? bucket.getMetadata().getName()
                 : bucket.getSpec().getBucketName();
-        provider.createBucket(instance.getSpec().getEndpoint(),
-                secretValue(adminSecret, "accessKey"), secretValue(adminSecret, "secretKey"),
-                bucketName, secretValue(ownerSecret, "accessKey"));
-
-        return UpdateControl.noUpdate();
     }
 
     private static String secretValue(Secret secret, String key) {
