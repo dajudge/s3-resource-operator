@@ -1,7 +1,7 @@
 package com.dajudge.s3operator.reconciler;
 
+import com.dajudge.s3operator.api.S3Backend;
 import com.dajudge.s3operator.api.S3Bucket;
-import com.dajudge.s3operator.api.S3Instance;
 import com.dajudge.s3operator.api.S3User;
 import com.dajudge.s3operator.api.S3UserStatus;
 import com.dajudge.s3operator.provider.VersityS3Provider;
@@ -38,8 +38,8 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
     @Override
     public UpdateControl<S3User> reconcile(S3User user, Context<S3User> context) {
         String namespace = user.getMetadata().getNamespace();
-        S3Instance instance = requireInstance(namespace, user.getSpec().getInstanceRef());
-        Secret adminSecret = requireAdminSecret(namespace, instance);
+        S3Backend backend = requireBackend(namespace, user.getSpec().getBackendRef());
+        Secret adminSecret = requireAdminSecret(namespace, backend);
 
         String secretName = user.getSpec().getSecretName() == null || user.getSpec().getSecretName().isBlank()
                 ? user.getMetadata().getName() + "-s3"
@@ -63,14 +63,14 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
                     .endMetadata()
                     .addToStringData("accessKey", accessKey)
                     .addToStringData("secretKey", secretKey)
-                    .addToStringData("endpoint", instance.getSpec().getEndpoint())
+                    .addToStringData("endpoint", backend.getSpec().getEndpoint())
                     .build();
             credentials = client.secrets().resource(credentials).create();
         }
 
         String accessKey = secretValue(credentials, "accessKey");
         String secretKey = secretValue(credentials, "secretKey");
-        provider.createUser(instance.getSpec().getEndpoint(),
+        provider.createUser(backend.getSpec().getEndpoint(),
                 secretValue(adminSecret, "accessKey"), secretValue(adminSecret, "secretKey"),
                 accessKey, secretKey, user.getSpec().getRole());
 
@@ -103,37 +103,37 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
             throw new IllegalStateException("S3User is still referenced by an S3Bucket: " + user.getMetadata().getName());
         }
 
-        S3Instance instance = requireInstance(namespace, user.getSpec().getInstanceRef());
-        Secret adminSecret = requireAdminSecret(namespace, instance);
+        S3Backend backend = requireBackend(namespace, user.getSpec().getBackendRef());
+        Secret adminSecret = requireAdminSecret(namespace, backend);
         String secretName = user.getSpec().getSecretName() == null || user.getSpec().getSecretName().isBlank()
                 ? user.getMetadata().getName() + "-s3"
                 : user.getSpec().getSecretName();
         Secret credentials = client.secrets().inNamespace(namespace).withName(secretName).get();
         if (credentials != null) {
-            provider.deleteUser(instance.getSpec().getEndpoint(),
+            provider.deleteUser(backend.getSpec().getEndpoint(),
                     secretValue(adminSecret, "accessKey"), secretValue(adminSecret, "secretKey"),
                     secretValue(credentials, "accessKey"));
         }
         return DeleteControl.defaultDelete();
     }
 
-    private S3Instance requireInstance(String namespace, String name) {
-        S3Instance instance = client.resources(S3Instance.class)
+    private S3Backend requireBackend(String namespace, String name) {
+        S3Backend backend = client.resources(S3Backend.class)
                 .inNamespace(namespace)
                 .withName(name)
                 .get();
-        if (instance == null) {
-            throw new IllegalStateException("S3Instance not found: " + name);
+        if (backend == null) {
+            throw new IllegalStateException("S3Backend not found: " + name);
         }
-        if (!provider.type().equals(instance.getSpec().getProvider())) {
-            throw new IllegalStateException("Unsupported S3 provider: " + instance.getSpec().getProvider());
+        if (!provider.type().equals(backend.getSpec().getProvider())) {
+            throw new IllegalStateException("Unsupported S3 provider: " + backend.getSpec().getProvider());
         }
-        return instance;
+        return backend;
     }
 
-    private Secret requireAdminSecret(String namespace, S3Instance instance) {
+    private Secret requireAdminSecret(String namespace, S3Backend backend) {
         Secret adminSecret = client.secrets().inNamespace(namespace)
-                .withName(instance.getSpec().getAdminCredentialsSecretRef().getName())
+                .withName(backend.getSpec().getAdminCredentialsSecretRef().getName())
                 .get();
         if (adminSecret == null) {
             throw new IllegalStateException("Admin credentials Secret not found");
