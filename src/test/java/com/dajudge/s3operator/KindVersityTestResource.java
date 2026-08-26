@@ -46,10 +46,7 @@ public class KindVersityTestResource implements QuarkusTestResourceLifecycleMana
                     .portForward(7070);
 
             return Map.of(
-                    "quarkus.kubernetes-client.kube-config-file", kubeconfig.toAbsolutePath().toString(),
-                    "quarkus.kubernetes-client.devservices.enabled", "false",
-                    "quarkus.operator-sdk.crd.generate", "true",
-                    "quarkus.operator-sdk.crd.apply", "true",
+                    "quarkus.kubernetes-client.kubeconfig-file", kubeconfig.toAbsolutePath().toString(),
                     "test.s3.endpoint", "http://127.0.0.1:" + portForward.getLocalPort()
             );
         } catch (Exception e) {
