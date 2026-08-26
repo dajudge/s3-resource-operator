@@ -41,7 +41,9 @@ class VersityGatewayE2ETest {
                 if (manifests == null) {
                     throw new IllegalStateException("versitygw.yaml not found");
                 }
-                client.load(manifests).createOrReplace();
+                client.load(manifests)
+                        .inNamespace("default")
+                        .createOrReplace();
             }
 
             client.apps().deployments()
