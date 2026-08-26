@@ -1,6 +1,7 @@
 package com.dajudge.s3operator;
 
 import com.dajudge.kindcontainer.KindContainer;
+import com.dajudge.s3operator.provider.VersityS3Provider;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientBuilder;
 import io.fabric8.kubernetes.client.LocalPortForward;
@@ -14,7 +15,6 @@ import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
-import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
@@ -32,7 +32,7 @@ class VersityGatewayE2ETest {
     static final KindContainer<?> KUBE = new KindContainer<>();
 
     @Test
-    void servesS3FromInsideKind() throws Exception {
+    void provisionsUserAndBucketAndServesS3FromInsideKind() throws Exception {
         try (KubernetesClient client = new KubernetesClientBuilder()
                 .withConfig(fromKubeconfig(KUBE.getKubeconfig()))
                 .build()) {
@@ -54,23 +54,31 @@ class VersityGatewayE2ETest {
                     .withName("versitygw")
                     .portForward(7070)) {
 
-                URI endpoint = URI.create("http://127.0.0.1:" + portForward.getLocalPort());
+                String endpoint = "http://127.0.0.1:" + portForward.getLocalPort();
+                String userAccess = "e2e-user";
+                String userSecret = "e2e-user-secret";
+                String bucket = "e2e-bucket";
+
+                VersityS3Provider provider = new VersityS3Provider();
+                provider.createUser(endpoint, "test-root-access", "test-root-secret",
+                        userAccess, userSecret, "user");
+                provider.createBucket(endpoint, "test-root-access", "test-root-secret",
+                        bucket, userAccess);
+
                 try (S3Client s3 = S3Client.builder()
-                        .endpointOverride(endpoint)
+                        .endpointOverride(URI.create(endpoint))
                         .region(Region.US_EAST_1)
                         .credentialsProvider(StaticCredentialsProvider.create(
-                                AwsBasicCredentials.create("test-root-access", "test-root-secret")))
+                                AwsBasicCredentials.create(userAccess, userSecret)))
                         .serviceConfiguration(S3Configuration.builder()
                                 .pathStyleAccessEnabled(true)
                                 .build())
                         .httpClientBuilder(UrlConnectionHttpClient.builder())
                         .build()) {
 
-                    String bucket = "e2e-bucket";
                     String key = "hello.txt";
                     String payload = "hello from kindcontainer";
 
-                    s3.createBucket(CreateBucketRequest.builder().bucket(bucket).build());
                     s3.putObject(PutObjectRequest.builder().bucket(bucket).key(key).build(),
                             RequestBody.fromString(payload, StandardCharsets.UTF_8));
 
