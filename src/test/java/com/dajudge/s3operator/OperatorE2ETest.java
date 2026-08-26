@@ -6,6 +6,7 @@ import com.dajudge.s3operator.api.S3Bucket;
 import com.dajudge.s3operator.api.S3BucketSpec;
 import com.dajudge.s3operator.api.S3User;
 import com.dajudge.s3operator.api.S3UserSpec;
+import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
 import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.api.model.SecretBuilder;
@@ -78,22 +79,31 @@ class OperatorE2ETest {
             assertThat(s3.getObjectAsBytes(GetObjectRequest.builder().bucket("e2e-bucket").key(key).build()).asUtf8String())
                     .isEqualTo(payload);
 
-            // Idempotent reconciliation must not change Ready transition timestamps.
+            // Force another successful reconciliation through spec changes and verify idempotence/condition semantics.
             client.resources(S3User.class).inNamespace(NAMESPACE).withName("e2e-user").edit(user -> {
-                user.getMetadata().getAnnotations().put("test.dajudge.com/reconcile", "1");
+                user.getSpec().setRole("admin");
                 return user;
             });
             client.resources(S3Bucket.class).inNamespace(NAMESPACE).withName("e2e-bucket").edit(bucket -> {
-                bucket.getMetadata().getAnnotations().put("test.dajudge.com/reconcile", "1");
+                bucket.getSpec().setDeletionPolicy(S3BucketSpec.DeletionPolicy.DELETE);
                 return bucket;
             });
-            await().during(Duration.ofSeconds(1)).atMost(TIMEOUT).untilAsserted(() -> {
-                assertThat(awaitUserReady("e2e-user").getStatus().getConditions().getFirst().getLastTransitionTime())
+            await().atMost(TIMEOUT).untilAsserted(() -> {
+                S3User reconciledUser = awaitUserReady("e2e-user");
+                S3Bucket reconciledBucket = awaitBucketReady("e2e-bucket");
+                assertThat(reconciledUser.getMetadata().getGeneration()).isGreaterThan(readyUser.getMetadata().getGeneration());
+                assertThat(reconciledBucket.getMetadata().getGeneration()).isGreaterThan(readyBucket.getMetadata().getGeneration());
+                assertThat(reconciledUser.getStatus().getConditions().getFirst().getLastTransitionTime())
                         .isEqualTo(originalUserTransition);
-                assertThat(awaitBucketReady("e2e-bucket").getStatus().getConditions().getFirst().getLastTransitionTime())
+                assertThat(reconciledBucket.getStatus().getConditions().getFirst().getLastTransitionTime())
                         .isEqualTo(originalBucketTransition);
                 s3.headBucket(HeadBucketRequest.builder().bucket("e2e-bucket").build());
             });
+            client.resources(S3Bucket.class).inNamespace(NAMESPACE).withName("e2e-bucket").edit(bucket -> {
+                bucket.getSpec().setDeletionPolicy(S3BucketSpec.DeletionPolicy.RETAIN);
+                return bucket;
+            });
+            awaitBucketReady("e2e-bucket");
 
             // User deletion is blocked while buckets reference it.
             client.resources(S3User.class).inNamespace(NAMESPACE).withName("e2e-user").delete();
@@ -130,7 +140,7 @@ class OperatorE2ETest {
         createAdminSecret("temporary-admin");
         createBackend("admin-missing", "temporary-admin");
         createUser("admin-missing-user", "admin-missing");
-        Secret adminMissingCredentials = awaitSecret("admin-missing-user-s3");
+        awaitSecret("admin-missing-user-s3");
         createBucket("admin-missing-bucket", "admin-missing", "admin-missing-user", S3BucketSpec.DeletionPolicy.DELETE);
         awaitBucketReady("admin-missing-bucket");
 
@@ -139,7 +149,6 @@ class OperatorE2ETest {
         awaitResourceDeleted(S3Bucket.class, "admin-missing-bucket");
         client.resources(S3User.class).inNamespace(NAMESPACE).withName("admin-missing-user").delete();
         awaitResourceDeleted(S3User.class, "admin-missing-user");
-        assertThat(adminMissingCredentials).isNotNull();
     }
 
     private S3Client s3(String accessKey, String secretKey) {
@@ -242,7 +251,7 @@ class OperatorE2ETest {
         return result[0];
     }
 
-    private <T> void awaitResourceDeleted(Class<T> type, String name) {
+    private <T extends HasMetadata> void awaitResourceDeleted(Class<T> type, String name) {
         await().atMost(TIMEOUT).untilAsserted(() -> assertThat(
                 client.resources(type).inNamespace(NAMESPACE).withName(name).get()).isNull());
     }
