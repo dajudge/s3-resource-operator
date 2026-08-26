@@ -1,9 +1,9 @@
 package com.dajudge.s3operator;
 
+import com.dajudge.s3operator.api.S3Backend;
+import com.dajudge.s3operator.api.S3BackendSpec;
 import com.dajudge.s3operator.api.S3Bucket;
 import com.dajudge.s3operator.api.S3BucketSpec;
-import com.dajudge.s3operator.api.S3Instance;
-import com.dajudge.s3operator.api.S3InstanceSpec;
 import com.dajudge.s3operator.api.S3User;
 import com.dajudge.s3operator.api.S3UserSpec;
 import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
@@ -30,15 +30,16 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.Base64;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 @QuarkusTest
 @QuarkusTestResource(KindVersityTestResource.class)
 class OperatorE2ETest {
     private static final String NAMESPACE = "default";
+    private static final Duration TIMEOUT = Duration.ofSeconds(30);
 
     @Inject
     KubernetesClient client;
@@ -47,26 +48,29 @@ class OperatorE2ETest {
     String endpoint;
 
     @Test
-    void reconcilesResourcesAndEnforcesBucketLifecycle() throws Exception {
+    void reconcilesResourcesAndEnforcesBucketLifecycle() {
         createAdminSecret();
-        createInstance();
+        createBackend();
         createUser();
 
-        Secret credentials = awaitSecret("e2e-user-s3", Duration.ofSeconds(30));
+        Secret credentials = awaitSecret("e2e-user-s3");
         String accessKey = secretValue(credentials, "accessKey");
         String secretKey = secretValue(credentials, "secretKey");
-        awaitUserReady("e2e-user", Duration.ofSeconds(30));
+        awaitUserReady("e2e-user");
 
         createBucket("e2e-bucket", S3BucketSpec.DeletionPolicy.RETAIN);
         createBucket("delete-me", S3BucketSpec.DeletionPolicy.DELETE);
-        awaitBucketReady("e2e-bucket", Duration.ofSeconds(30));
-        awaitBucketReady("delete-me", Duration.ofSeconds(30));
+        awaitBucketReady("e2e-bucket");
+        awaitBucketReady("delete-me");
 
         try (S3Client s3 = s3(accessKey, secretKey)) {
             String key = "hello.txt";
             String payload = "hello from the real operator";
-            awaitBucketAndPut(s3, "e2e-bucket", key, payload, Duration.ofSeconds(30));
-            awaitBucket(s3, "delete-me", Duration.ofSeconds(30));
+            await().atMost(TIMEOUT).ignoreExceptions().untilAsserted(() ->
+                    s3.putObject(PutObjectRequest.builder().bucket("e2e-bucket").key(key).build(),
+                            RequestBody.fromString(payload, StandardCharsets.UTF_8)));
+            await().atMost(TIMEOUT).ignoreExceptions().untilAsserted(() ->
+                    s3.headBucket(HeadBucketRequest.builder().bucket("delete-me").build()));
 
             String actual = s3.getObjectAsBytes(GetObjectRequest.builder()
                             .bucket("e2e-bucket")
@@ -76,11 +80,13 @@ class OperatorE2ETest {
             assertThat(actual).isEqualTo(payload);
 
             client.resources(S3Bucket.class).inNamespace(NAMESPACE).withName("delete-me").delete();
-            awaitBucketResourceDeleted("delete-me", Duration.ofSeconds(30));
-            awaitBackendBucketMissing(s3, "delete-me", Duration.ofSeconds(30));
+            await().atMost(TIMEOUT).untilAsserted(() -> assertThat(
+                    client.resources(S3Bucket.class).inNamespace(NAMESPACE).withName("delete-me").get()).isNull());
+            await().atMost(TIMEOUT).until(() -> backendBucketMissing(s3, "delete-me"));
 
             client.resources(S3Bucket.class).inNamespace(NAMESPACE).withName("e2e-bucket").delete();
-            awaitBucketResourceDeleted("e2e-bucket", Duration.ofSeconds(30));
+            await().atMost(TIMEOUT).untilAsserted(() -> assertThat(
+                    client.resources(S3Bucket.class).inNamespace(NAMESPACE).withName("e2e-bucket").get()).isNull());
             s3.headBucket(HeadBucketRequest.builder().bucket("e2e-bucket").build());
         }
     }
@@ -106,22 +112,22 @@ class OperatorE2ETest {
                 .build()).create();
     }
 
-    private void createInstance() {
-        S3InstanceSpec.SecretRef adminRef = new S3InstanceSpec.SecretRef();
+    private void createBackend() {
+        S3BackendSpec.SecretRef adminRef = new S3BackendSpec.SecretRef();
         adminRef.setName("versity-admin");
-        S3InstanceSpec spec = new S3InstanceSpec();
+        S3BackendSpec spec = new S3BackendSpec();
         spec.setProvider("versity");
         spec.setEndpoint(endpoint);
         spec.setAdminCredentialsSecretRef(adminRef);
-        S3Instance instance = new S3Instance();
-        instance.setMetadata(new ObjectMetaBuilder().withName("home").withNamespace(NAMESPACE).build());
-        instance.setSpec(spec);
-        client.resources(S3Instance.class).inNamespace(NAMESPACE).resource(instance).create();
+        S3Backend backend = new S3Backend();
+        backend.setMetadata(new ObjectMetaBuilder().withName("home").withNamespace(NAMESPACE).build());
+        backend.setSpec(spec);
+        client.resources(S3Backend.class).inNamespace(NAMESPACE).resource(backend).create();
     }
 
     private void createUser() {
         S3UserSpec spec = new S3UserSpec();
-        spec.setInstanceRef("home");
+        spec.setBackendRef("home");
         spec.setSecretName("e2e-user-s3");
         S3User user = new S3User();
         user.setMetadata(new ObjectMetaBuilder().withName("e2e-user").withNamespace(NAMESPACE).build());
@@ -131,7 +137,7 @@ class OperatorE2ETest {
 
     private void createBucket(String name, S3BucketSpec.DeletionPolicy deletionPolicy) {
         S3BucketSpec spec = new S3BucketSpec();
-        spec.setInstanceRef("home");
+        spec.setBackendRef("home");
         spec.setUserRef("e2e-user");
         spec.setBucketName(name);
         spec.setDeletionPolicy(deletionPolicy);
@@ -141,99 +147,52 @@ class OperatorE2ETest {
         client.resources(S3Bucket.class).inNamespace(NAMESPACE).resource(bucket).create();
     }
 
-    private void awaitUserReady(String name, Duration timeout) throws InterruptedException {
-        Instant deadline = Instant.now().plus(timeout);
-        while (Instant.now().isBefore(deadline)) {
+    private void awaitUserReady(String name) {
+        await().atMost(TIMEOUT).untilAsserted(() -> {
             S3User user = client.resources(S3User.class).inNamespace(NAMESPACE).withName(name).get();
-            if (user != null && user.getStatus() != null
-                    && user.getMetadata().getGeneration().equals(user.getStatus().getObservedGeneration())
-                    && user.getStatus().getConditions().stream().anyMatch(c -> "Ready".equals(c.getType()) && "True".equals(c.getStatus()))) {
-                return;
-            }
-            Thread.sleep(250);
-        }
-        throw new AssertionError("Timed out waiting for ready S3User " + name);
+            assertThat(user).isNotNull();
+            assertThat(user.getStatus()).isNotNull();
+            assertThat(user.getStatus().getObservedGeneration()).isEqualTo(user.getMetadata().getGeneration());
+            assertThat(user.getStatus().getConditions())
+                    .anySatisfy(condition -> {
+                        assertThat(condition.getType()).isEqualTo("Ready");
+                        assertThat(condition.getStatus()).isEqualTo("True");
+                    });
+        });
     }
 
-    private void awaitBucketReady(String name, Duration timeout) throws InterruptedException {
-        Instant deadline = Instant.now().plus(timeout);
-        while (Instant.now().isBefore(deadline)) {
+    private void awaitBucketReady(String name) {
+        await().atMost(TIMEOUT).untilAsserted(() -> {
             S3Bucket bucket = client.resources(S3Bucket.class).inNamespace(NAMESPACE).withName(name).get();
-            if (bucket != null && bucket.getStatus() != null
-                    && bucket.getMetadata().getGeneration().equals(bucket.getStatus().getObservedGeneration())
-                    && bucket.getStatus().getConditions().stream().anyMatch(c -> "Ready".equals(c.getType()) && "True".equals(c.getStatus()))) {
-                return;
-            }
-            Thread.sleep(250);
-        }
-        throw new AssertionError("Timed out waiting for ready S3Bucket " + name);
+            assertThat(bucket).isNotNull();
+            assertThat(bucket.getStatus()).isNotNull();
+            assertThat(bucket.getStatus().getObservedGeneration()).isEqualTo(bucket.getMetadata().getGeneration());
+            assertThat(bucket.getStatus().getConditions())
+                    .anySatisfy(condition -> {
+                        assertThat(condition.getType()).isEqualTo("Ready");
+                        assertThat(condition.getStatus()).isEqualTo("True");
+                    });
+        });
     }
 
-    private Secret awaitSecret(String name, Duration timeout) throws InterruptedException {
-        Instant deadline = Instant.now().plus(timeout);
-        while (Instant.now().isBefore(deadline)) {
+    private Secret awaitSecret(String name) {
+        final Secret[] result = new Secret[1];
+        await().atMost(TIMEOUT).untilAsserted(() -> {
             Secret secret = client.secrets().inNamespace(NAMESPACE).withName(name).get();
-            if (secret != null && secret.getData() != null
-                    && secret.getData().containsKey("accessKey") && secret.getData().containsKey("secretKey")) {
-                return secret;
-            }
-            Thread.sleep(250);
-        }
-        throw new AssertionError("Timed out waiting for Secret " + name);
+            assertThat(secret).isNotNull();
+            assertThat(secret.getData()).containsKeys("accessKey", "secretKey");
+            result[0] = secret;
+        });
+        return result[0];
     }
 
-    private void awaitBucketResourceDeleted(String name, Duration timeout) throws InterruptedException {
-        Instant deadline = Instant.now().plus(timeout);
-        while (Instant.now().isBefore(deadline)) {
-            if (client.resources(S3Bucket.class).inNamespace(NAMESPACE).withName(name).get() == null) return;
-            Thread.sleep(250);
+    private static boolean backendBucketMissing(S3Client s3, String bucket) {
+        try {
+            s3.headBucket(HeadBucketRequest.builder().bucket(bucket).build());
+            return false;
+        } catch (S3Exception e) {
+            return e.statusCode() == 404;
         }
-        throw new AssertionError("Timed out waiting for S3Bucket deletion " + name);
-    }
-
-    private static void awaitBucket(S3Client s3, String bucket, Duration timeout) throws InterruptedException {
-        Instant deadline = Instant.now().plus(timeout);
-        RuntimeException lastFailure = null;
-        while (Instant.now().isBefore(deadline)) {
-            try {
-                s3.headBucket(HeadBucketRequest.builder().bucket(bucket).build());
-                return;
-            } catch (RuntimeException e) {
-                lastFailure = e;
-                Thread.sleep(250);
-            }
-        }
-        throw new AssertionError("Timed out waiting for bucket " + bucket, lastFailure);
-    }
-
-    private static void awaitBackendBucketMissing(S3Client s3, String bucket, Duration timeout) throws InterruptedException {
-        Instant deadline = Instant.now().plus(timeout);
-        while (Instant.now().isBefore(deadline)) {
-            try {
-                s3.headBucket(HeadBucketRequest.builder().bucket(bucket).build());
-            } catch (S3Exception e) {
-                if (e.statusCode() == 404) return;
-            }
-            Thread.sleep(250);
-        }
-        throw new AssertionError("Timed out waiting for backend bucket deletion " + bucket);
-    }
-
-    private static void awaitBucketAndPut(S3Client s3, String bucket, String key, String payload, Duration timeout)
-            throws InterruptedException {
-        Instant deadline = Instant.now().plus(timeout);
-        RuntimeException lastFailure = null;
-        while (Instant.now().isBefore(deadline)) {
-            try {
-                s3.putObject(PutObjectRequest.builder().bucket(bucket).key(key).build(),
-                        RequestBody.fromString(payload, StandardCharsets.UTF_8));
-                return;
-            } catch (RuntimeException e) {
-                lastFailure = e;
-                Thread.sleep(250);
-            }
-        }
-        throw new AssertionError("Timed out waiting for bucket " + bucket, lastFailure);
     }
 
     private static String secretValue(Secret secret, String key) {
