@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: versitygw
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: versitygw
+  template:
+    metadata:
+      labels:
+        app: versitygw
+    spec:
+      containers:
+        - name: versitygw
+          image: ghcr.io/versity/versitygw:v1.4.1
+          env:
+            - name: ROOT_ACCESS_KEY
+              value: test-root-access
+            - name: ROOT_SECRET_KEY
+              value: test-root-secret
+            - name: VGW_PORT
+              value: ":7070"
+            - name: VGW_IAM_DIR
+              value: /data/iam
+            - name: VGW_BACKEND
+              value: posix
+            - name: VGW_BACKEND_ARGS
+              value: /data/s3
+          ports:
+            - name: s3
+              containerPort: 7070
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            tcpSocket:
+              port: s3
+            initialDelaySeconds: 1
+            periodSeconds: 1
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: versitygw
+spec:
+  selector:
+    app: versitygw
+  ports:
+    - name: s3
+      port: 7070
+      targetPort: s3
