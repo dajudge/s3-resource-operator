@@ -49,11 +49,19 @@ public class VersityS3Provider implements S3Provider {
     @Override
     public void createUser(String endpoint, String adminAccessKey, String adminSecretKey,
                            String accessKey, String secretKey, String role) {
-        String body = "<Account><Access>" + xml(accessKey) + "</Access><Secret>" + xml(secretKey)
+        String createBody = "<Account><Access>" + xml(accessKey) + "</Access><Secret>" + xml(secretKey)
                 + "</Secret><Role>" + xml(role) + "</Role></Account>";
-        send("PATCH", endpoint, "/create-user", "", body,
+        boolean alreadyExists = send("PATCH", endpoint, "/create-user", "", createBody,
                 Map.of("content-type", "application/xml"), adminAccessKey, adminSecretKey,
                 "XAdminUserExists");
+
+        if (alreadyExists) {
+            String updateBody = "<MutableProps><Secret>" + xml(secretKey) + "</Secret><Role>" + xml(role)
+                    + "</Role></MutableProps>";
+            send("PATCH", endpoint, "/update-user", "access=" + url(accessKey), updateBody,
+                    Map.of("content-type", "application/xml"), adminAccessKey, adminSecretKey,
+                    null);
+        }
     }
 
     @Override
@@ -76,9 +84,9 @@ public class VersityS3Provider implements S3Provider {
                 adminAccessKey, adminSecretKey, "NoSuchBucket");
     }
 
-    private void send(String method, String endpoint, String path, String query, String body,
-                      Map<String, String> extraHeaders, String accessKey, String secretKey,
-                      String idempotentErrorCode) {
+    private boolean send(String method, String endpoint, String path, String query, String body,
+                         Map<String, String> extraHeaders, String accessKey, String secretKey,
+                         String idempotentErrorCode) {
         try {
             URI base = URI.create(endpoint);
             URI uri = URI.create(endpoint.replaceAll("/$", "") + path + (query.isEmpty() ? "" : "?" + query));
@@ -118,10 +126,14 @@ public class VersityS3Provider implements S3Provider {
                     : HttpRequest.BodyPublishers.ofByteArray(payload));
 
             HttpResponse<String> response = httpClient.send(request.build(), HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() >= 400 && !response.body().contains(idempotentErrorCode)) {
-                throw new IllegalStateException("VersityGW admin request failed: HTTP " + response.statusCode()
-                        + " " + response.body());
+            if (response.statusCode() < 400) {
+                return false;
             }
+            if (idempotentErrorCode != null && response.body().contains(idempotentErrorCode)) {
+                return true;
+            }
+            throw new IllegalStateException("VersityGW admin request failed: HTTP " + response.statusCode()
+                    + " " + response.body());
         } catch (IOException e) {
             throw new IllegalStateException("VersityGW admin request failed", e);
         } catch (InterruptedException e) {
