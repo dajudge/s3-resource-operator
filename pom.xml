@@ -12,6 +12,7 @@
     <quarkus-operator-sdk.version>7.8.0</quarkus-operator-sdk.version>
     <kindcontainer.version>2.0.0</kindcontainer.version>
     <testcontainers.version>2.0.2</testcontainers.version>
+    <aws.sdk.version>2.43.2</aws.sdk.version>
   </properties>
 
   <dependencyManagement>
@@ -20,6 +21,13 @@
         <groupId>io.quarkus.platform</groupId>
         <artifactId>quarkus-bom</artifactId>
         <version>${quarkus.platform.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>bom</artifactId>
+        <version>${aws.sdk.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
@@ -62,6 +70,16 @@
       <groupId>com.dajudge.kindcontainer</groupId>
       <artifactId>kindcontainer</artifactId>
       <version>${kindcontainer.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>s3</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>url-connection-client</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>
