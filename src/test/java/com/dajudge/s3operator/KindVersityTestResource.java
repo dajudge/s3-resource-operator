@@ -46,7 +46,7 @@ public class KindVersityTestResource implements QuarkusTestResourceLifecycleMana
                     .portForward(7070);
 
             return Map.of(
-                    "quarkus.kubernetes-client.kubeconfig-file", kubeconfig.toAbsolutePath().toString(),
+                    "quarkus.kubernetes-client.kube-config-file", kubeconfig.toAbsolutePath().toString(),
                     "quarkus.kubernetes-client.devservices.enabled", "false",
                     "quarkus.operator-sdk.crd.generate", "true",
                     "quarkus.operator-sdk.crd.apply", "true",
@@ -61,7 +61,11 @@ public class KindVersityTestResource implements QuarkusTestResourceLifecycleMana
     @Override
     public void stop() {
         if (portForward != null) {
-            portForward.close();
+            try {
+                portForward.close();
+            } catch (Exception ignored) {
+                // Best-effort cleanup.
+            }
             portForward = null;
         }
         if (client != null) {
