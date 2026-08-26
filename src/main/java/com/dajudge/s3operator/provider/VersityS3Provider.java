@@ -16,6 +16,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
@@ -51,16 +52,15 @@ public class VersityS3Provider implements S3Provider {
                            String accessKey, String secretKey, String role) {
         String createBody = "<Account><Access>" + xml(accessKey) + "</Access><Secret>" + xml(secretKey)
                 + "</Secret><Role>" + xml(role) + "</Role></Account>";
-        boolean alreadyExists = send("PATCH", endpoint, "/create-user", "", createBody,
+        String conflict = send("PATCH", endpoint, "/create-user", "", createBody,
                 Map.of("content-type", "application/xml"), adminAccessKey, adminSecretKey,
                 "XAdminUserExists");
 
-        if (alreadyExists) {
+        if ("XAdminUserExists".equals(conflict)) {
             String updateBody = "<MutableProps><Secret>" + xml(secretKey) + "</Secret><Role>" + xml(role)
                     + "</Role></MutableProps>";
             send("PATCH", endpoint, "/update-user", "access=" + url(accessKey), updateBody,
-                    Map.of("content-type", "application/xml"), adminAccessKey, adminSecretKey,
-                    null);
+                    Map.of("content-type", "application/xml"), adminAccessKey, adminSecretKey);
         }
     }
 
@@ -73,9 +73,15 @@ public class VersityS3Provider implements S3Provider {
     @Override
     public void createBucket(String endpoint, String adminAccessKey, String adminSecretKey,
                              String bucketName, String ownerAccessKey) {
-        send("PATCH", endpoint, "/" + url(bucketName) + "/create", "", "",
+        String conflict = send("PATCH", endpoint, "/" + url(bucketName) + "/create", "", "",
                 Map.of("x-vgw-owner", ownerAccessKey), adminAccessKey, adminSecretKey,
-                "BucketAlreadyOwnedByYou");
+                "BucketAlreadyOwnedByYou", "BucketAlreadyExists");
+
+        if ("BucketAlreadyExists".equals(conflict)) {
+            String query = "bucket=" + url(bucketName) + "&owner=" + url(ownerAccessKey);
+            send("PATCH", endpoint, "/change-bucket-owner", query, "", Map.of(),
+                    adminAccessKey, adminSecretKey);
+        }
     }
 
     @Override
@@ -84,9 +90,9 @@ public class VersityS3Provider implements S3Provider {
                 adminAccessKey, adminSecretKey, "NoSuchBucket");
     }
 
-    private boolean send(String method, String endpoint, String path, String query, String body,
-                         Map<String, String> extraHeaders, String accessKey, String secretKey,
-                         String idempotentErrorCode) {
+    private String send(String method, String endpoint, String path, String query, String body,
+                        Map<String, String> extraHeaders, String accessKey, String secretKey,
+                        String... toleratedErrorCodes) {
         try {
             URI base = URI.create(endpoint);
             URI uri = URI.create(endpoint.replaceAll("/$", "") + path + (query.isEmpty() ? "" : "?" + query));
@@ -127,10 +133,14 @@ public class VersityS3Provider implements S3Provider {
 
             HttpResponse<String> response = httpClient.send(request.build(), HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 400) {
-                return false;
+                return null;
             }
-            if (idempotentErrorCode != null && response.body().contains(idempotentErrorCode)) {
-                return true;
+            String tolerated = Arrays.stream(toleratedErrorCodes)
+                    .filter(response.body()::contains)
+                    .findFirst()
+                    .orElse(null);
+            if (tolerated != null) {
+                return tolerated;
             }
             throw new IllegalStateException("VersityGW admin request failed: HTTP " + response.statusCode()
                     + " " + response.body());
