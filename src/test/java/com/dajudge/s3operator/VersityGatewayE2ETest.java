@@ -29,7 +29,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 class VersityGatewayE2ETest {
 
     @Container
-    static final KindContainer<?> KUBE = new KindContainer<>();
+    static final KindContainer<?> KUBE = new KindContainer<>()
+            .withKubectl(kubectl -> kubectl.apply
+                    .namespace("default")
+                    .fileFromClasspath("versitygw.yaml")
+                    .run());
 
     @Test
     void provisionsUserAndBucketAndServesS3FromInsideKind() throws Exception {
@@ -37,19 +41,15 @@ class VersityGatewayE2ETest {
                 .withConfig(fromKubeconfig(KUBE.getKubeconfig()))
                 .build()) {
 
-            try (var manifests = getClass().getResourceAsStream("/versitygw.yaml")) {
-                if (manifests == null) {
-                    throw new IllegalStateException("versitygw.yaml not found");
-                }
-                client.load(manifests)
+            try {
+                client.apps().deployments()
                         .inNamespace("default")
-                        .createOrReplace();
+                        .withName("versitygw")
+                        .waitUntilReady(2, TimeUnit.MINUTES);
+            } catch (RuntimeException e) {
+                dumpVersityDiagnostics(client);
+                throw e;
             }
-
-            client.apps().deployments()
-                    .inNamespace("default")
-                    .withName("versitygw")
-                    .waitUntilReady(2, TimeUnit.MINUTES);
 
             try (LocalPortForward portForward = client.services()
                     .inNamespace("default")
@@ -92,6 +92,34 @@ class VersityGatewayE2ETest {
 
                     assertThat(actual).isEqualTo(payload);
                 }
+            }
+        }
+    }
+
+    private static void dumpVersityDiagnostics(KubernetesClient client) {
+        System.err.println("=== VersityGW deployment ===");
+        System.err.println(client.apps().deployments()
+                .inNamespace("default")
+                .withName("versitygw")
+                .get());
+
+        System.err.println("=== VersityGW pods ===");
+        var pods = client.pods()
+                .inNamespace("default")
+                .withLabel("app", "versitygw")
+                .list()
+                .getItems();
+        for (var pod : pods) {
+            var podName = pod.getMetadata().getName();
+            System.err.println(pod);
+            System.err.println("=== logs: " + podName + " ===");
+            try {
+                System.err.println(client.pods()
+                        .inNamespace("default")
+                        .withName(podName)
+                        .getLog());
+            } catch (RuntimeException logError) {
+                System.err.println("Unable to fetch logs: " + logError);
             }
         }
     }
