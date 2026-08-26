@@ -16,6 +16,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
@@ -49,11 +50,18 @@ public class VersityS3Provider implements S3Provider {
     @Override
     public void createUser(String endpoint, String adminAccessKey, String adminSecretKey,
                            String accessKey, String secretKey, String role) {
-        String body = "<Account><Access>" + xml(accessKey) + "</Access><Secret>" + xml(secretKey)
+        String createBody = "<Account><Access>" + xml(accessKey) + "</Access><Secret>" + xml(secretKey)
                 + "</Secret><Role>" + xml(role) + "</Role></Account>";
-        send("PATCH", endpoint, "/create-user", "", body,
+        String conflict = send("PATCH", endpoint, "/create-user", "", createBody,
                 Map.of("content-type", "application/xml"), adminAccessKey, adminSecretKey,
                 "XAdminUserExists");
+
+        if ("XAdminUserExists".equals(conflict)) {
+            String updateBody = "<MutableProps><Secret>" + xml(secretKey) + "</Secret><Role>" + xml(role)
+                    + "</Role></MutableProps>";
+            send("PATCH", endpoint, "/update-user", "access=" + url(accessKey), updateBody,
+                    Map.of("content-type", "application/xml"), adminAccessKey, adminSecretKey);
+        }
     }
 
     @Override
@@ -65,9 +73,15 @@ public class VersityS3Provider implements S3Provider {
     @Override
     public void createBucket(String endpoint, String adminAccessKey, String adminSecretKey,
                              String bucketName, String ownerAccessKey) {
-        send("PATCH", endpoint, "/" + url(bucketName) + "/create", "", "",
+        String conflict = send("PATCH", endpoint, "/" + url(bucketName) + "/create", "", "",
                 Map.of("x-vgw-owner", ownerAccessKey), adminAccessKey, adminSecretKey,
-                "BucketAlreadyOwnedByYou");
+                "BucketAlreadyOwnedByYou", "BucketAlreadyExists");
+
+        if ("BucketAlreadyExists".equals(conflict)) {
+            String query = "bucket=" + url(bucketName) + "&owner=" + url(ownerAccessKey);
+            send("PATCH", endpoint, "/change-bucket-owner", query, "", Map.of(),
+                    adminAccessKey, adminSecretKey);
+        }
     }
 
     @Override
@@ -76,9 +90,9 @@ public class VersityS3Provider implements S3Provider {
                 adminAccessKey, adminSecretKey, "NoSuchBucket");
     }
 
-    private void send(String method, String endpoint, String path, String query, String body,
-                      Map<String, String> extraHeaders, String accessKey, String secretKey,
-                      String idempotentErrorCode) {
+    private String send(String method, String endpoint, String path, String query, String body,
+                        Map<String, String> extraHeaders, String accessKey, String secretKey,
+                        String... toleratedErrorCodes) {
         try {
             URI base = URI.create(endpoint);
             URI uri = URI.create(endpoint.replaceAll("/$", "") + path + (query.isEmpty() ? "" : "?" + query));
@@ -118,10 +132,18 @@ public class VersityS3Provider implements S3Provider {
                     : HttpRequest.BodyPublishers.ofByteArray(payload));
 
             HttpResponse<String> response = httpClient.send(request.build(), HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() >= 400 && !response.body().contains(idempotentErrorCode)) {
-                throw new IllegalStateException("VersityGW admin request failed: HTTP " + response.statusCode()
-                        + " " + response.body());
+            if (response.statusCode() < 400) {
+                return null;
             }
+            String tolerated = Arrays.stream(toleratedErrorCodes)
+                    .filter(response.body()::contains)
+                    .findFirst()
+                    .orElse(null);
+            if (tolerated != null) {
+                return tolerated;
+            }
+            throw new IllegalStateException("VersityGW admin request failed: HTTP " + response.statusCode()
+                    + " " + response.body());
         } catch (IOException e) {
             throw new IllegalStateException("VersityGW admin request failed", e);
         } catch (InterruptedException e) {
