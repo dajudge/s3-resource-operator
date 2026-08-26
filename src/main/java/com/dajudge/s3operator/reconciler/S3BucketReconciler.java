@@ -6,6 +6,7 @@ import com.dajudge.s3operator.api.S3BucketSpec;
 import com.dajudge.s3operator.api.S3BucketStatus;
 import com.dajudge.s3operator.api.S3User;
 import com.dajudge.s3operator.provider.VersityS3Provider;
+import io.fabric8.kubernetes.api.model.Condition;
 import io.fabric8.kubernetes.api.model.ConditionBuilder;
 import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.client.KubernetesClient;
@@ -47,6 +48,7 @@ public class S3BucketReconciler implements Reconciler<S3Bucket>, Cleaner<S3Bucke
                 bucketName, secretValue(userSecret, "accessKey"));
 
         S3BucketStatus status = bucket.getStatus() == null ? new S3BucketStatus() : bucket.getStatus();
+        String transitionTime = readyTransitionTime(status.getConditions());
         status.setObservedGeneration(bucket.getMetadata().getGeneration());
         status.setConditions(List.of(new ConditionBuilder()
                 .withType("Ready")
@@ -54,7 +56,7 @@ public class S3BucketReconciler implements Reconciler<S3Bucket>, Cleaner<S3Bucke
                 .withReason("Reconciled")
                 .withMessage("Versity bucket is ready")
                 .withObservedGeneration(bucket.getMetadata().getGeneration())
-                .withLastTransitionTime(Instant.now().toString())
+                .withLastTransitionTime(transitionTime)
                 .build()));
         bucket.setStatus(status);
         return UpdateControl.patchStatus(bucket);
@@ -62,14 +64,29 @@ public class S3BucketReconciler implements Reconciler<S3Bucket>, Cleaner<S3Bucke
 
     @Override
     public DeleteControl cleanup(S3Bucket bucket, Context<S3Bucket> context) {
-        if (bucket.getSpec().getDeletionPolicy() == S3BucketSpec.DeletionPolicy.DELETE) {
-            String namespace = bucket.getMetadata().getNamespace();
-            S3Backend backend = requireBackend(namespace, bucket.getSpec().getBackendRef());
-            Secret adminSecret = requireAdminSecret(namespace, backend);
-            provider.deleteBucket(backend.getSpec().getEndpoint(),
-                    secretValue(adminSecret, "accessKey"), secretValue(adminSecret, "secretKey"),
-                    bucketName(bucket));
+        if (bucket.getSpec().getDeletionPolicy() != S3BucketSpec.DeletionPolicy.DELETE) {
+            return DeleteControl.defaultDelete();
         }
+
+        String namespace = bucket.getMetadata().getNamespace();
+        S3Backend backend = client.resources(S3Backend.class)
+                .inNamespace(namespace)
+                .withName(bucket.getSpec().getBackendRef())
+                .get();
+        if (backend == null || !provider.type().equals(backend.getSpec().getProvider())) {
+            return DeleteControl.defaultDelete();
+        }
+
+        Secret adminSecret = client.secrets().inNamespace(namespace)
+                .withName(backend.getSpec().getAdminCredentialsSecretRef().getName())
+                .get();
+        if (adminSecret == null) {
+            return DeleteControl.defaultDelete();
+        }
+
+        provider.deleteBucket(backend.getSpec().getEndpoint(),
+                secretValue(adminSecret, "accessKey"), secretValue(adminSecret, "secretKey"),
+                bucketName(bucket));
         return DeleteControl.defaultDelete();
     }
 
@@ -123,6 +140,18 @@ public class S3BucketReconciler implements Reconciler<S3Bucket>, Cleaner<S3Bucke
         return bucket.getSpec().getBucketName() == null || bucket.getSpec().getBucketName().isBlank()
                 ? bucket.getMetadata().getName()
                 : bucket.getSpec().getBucketName();
+    }
+
+    private static String readyTransitionTime(List<Condition> conditions) {
+        if (conditions != null) {
+            for (Condition condition : conditions) {
+                if ("Ready".equals(condition.getType()) && "True".equals(condition.getStatus())
+                        && condition.getLastTransitionTime() != null) {
+                    return condition.getLastTransitionTime();
+                }
+            }
+        }
+        return Instant.now().toString();
     }
 
     private static String secretValue(Secret secret, String key) {
