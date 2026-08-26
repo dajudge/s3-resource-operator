@@ -1,9 +1,9 @@
 package com.dajudge.s3operator.reconciler;
 
+import com.dajudge.s3operator.api.S3Backend;
 import com.dajudge.s3operator.api.S3Bucket;
 import com.dajudge.s3operator.api.S3BucketSpec;
 import com.dajudge.s3operator.api.S3BucketStatus;
-import com.dajudge.s3operator.api.S3Instance;
 import com.dajudge.s3operator.api.S3User;
 import com.dajudge.s3operator.provider.VersityS3Provider;
 import io.fabric8.kubernetes.api.model.ConditionBuilder;
@@ -36,13 +36,13 @@ public class S3BucketReconciler implements Reconciler<S3Bucket>, Cleaner<S3Bucke
     @Override
     public UpdateControl<S3Bucket> reconcile(S3Bucket bucket, Context<S3Bucket> context) {
         String namespace = bucket.getMetadata().getNamespace();
-        S3Instance instance = requireInstance(namespace, bucket.getSpec().getInstanceRef());
+        S3Backend backend = requireBackend(namespace, bucket.getSpec().getBackendRef());
         S3User user = requireUser(namespace, bucket.getSpec().getUserRef());
         Secret userSecret = requireUserSecret(namespace, user);
-        Secret adminSecret = requireAdminSecret(namespace, instance);
+        Secret adminSecret = requireAdminSecret(namespace, backend);
 
         String bucketName = bucketName(bucket);
-        provider.createBucket(instance.getSpec().getEndpoint(),
+        provider.createBucket(backend.getSpec().getEndpoint(),
                 secretValue(adminSecret, "accessKey"), secretValue(adminSecret, "secretKey"),
                 bucketName, secretValue(userSecret, "accessKey"));
 
@@ -64,27 +64,27 @@ public class S3BucketReconciler implements Reconciler<S3Bucket>, Cleaner<S3Bucke
     public DeleteControl cleanup(S3Bucket bucket, Context<S3Bucket> context) {
         if (bucket.getSpec().getDeletionPolicy() == S3BucketSpec.DeletionPolicy.DELETE) {
             String namespace = bucket.getMetadata().getNamespace();
-            S3Instance instance = requireInstance(namespace, bucket.getSpec().getInstanceRef());
-            Secret adminSecret = requireAdminSecret(namespace, instance);
-            provider.deleteBucket(instance.getSpec().getEndpoint(),
+            S3Backend backend = requireBackend(namespace, bucket.getSpec().getBackendRef());
+            Secret adminSecret = requireAdminSecret(namespace, backend);
+            provider.deleteBucket(backend.getSpec().getEndpoint(),
                     secretValue(adminSecret, "accessKey"), secretValue(adminSecret, "secretKey"),
                     bucketName(bucket));
         }
         return DeleteControl.defaultDelete();
     }
 
-    private S3Instance requireInstance(String namespace, String name) {
-        S3Instance instance = client.resources(S3Instance.class)
+    private S3Backend requireBackend(String namespace, String name) {
+        S3Backend backend = client.resources(S3Backend.class)
                 .inNamespace(namespace)
                 .withName(name)
                 .get();
-        if (instance == null) {
-            throw new IllegalStateException("S3Instance not found: " + name);
+        if (backend == null) {
+            throw new IllegalStateException("S3Backend not found: " + name);
         }
-        if (!provider.type().equals(instance.getSpec().getProvider())) {
-            throw new IllegalStateException("Unsupported S3 provider: " + instance.getSpec().getProvider());
+        if (!provider.type().equals(backend.getSpec().getProvider())) {
+            throw new IllegalStateException("Unsupported S3 provider: " + backend.getSpec().getProvider());
         }
-        return instance;
+        return backend;
     }
 
     private S3User requireUser(String namespace, String name) {
@@ -109,9 +109,9 @@ public class S3BucketReconciler implements Reconciler<S3Bucket>, Cleaner<S3Bucke
         return secret;
     }
 
-    private Secret requireAdminSecret(String namespace, S3Instance instance) {
+    private Secret requireAdminSecret(String namespace, S3Backend backend) {
         Secret secret = client.secrets().inNamespace(namespace)
-                .withName(instance.getSpec().getAdminCredentialsSecretRef().getName())
+                .withName(backend.getSpec().getAdminCredentialsSecretRef().getName())
                 .get();
         if (secret == null) {
             throw new IllegalStateException("Admin credentials Secret not found");
