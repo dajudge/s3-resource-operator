@@ -11,6 +11,7 @@
     <quarkus.platform.version>3.38.3</quarkus.platform.version>
     <quarkus-operator-sdk.version>7.8.0</quarkus-operator-sdk.version>
     <kindcontainer.version>2.0.0</kindcontainer.version>
+    <testcontainers.version>2.0.2</testcontainers.version>
   </properties>
 
   <dependencyManagement>
@@ -42,13 +43,19 @@
 
     <dependency>
       <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-junit5</artifactId>
+      <artifactId>quarkus-junit</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.assertj</groupId>
       <artifactId>assertj-core</artifactId>
       <version>3.27.6</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-junit-jupiter</artifactId>
+      <version>${testcontainers.version}</version>
       <scope>test</scope>
     </dependency>
     <dependency>
