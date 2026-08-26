@@ -9,7 +9,7 @@ import io.fabric8.kubernetes.model.annotation.Version;
 
 @Group("s3.dajudge.com")
 @Version("v1alpha1")
-@Kind("S3Instance")
-@Plural("s3instances")
-public class S3Instance extends CustomResource<S3InstanceSpec, S3InstanceStatus> implements Namespaced {
+@Kind("S3Backend")
+@Plural("s3backends")
+public class S3Backend extends CustomResource<S3BackendSpec, S3BackendStatus> implements Namespaced {
 }

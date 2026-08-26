@@ -1,15 +1,15 @@
 package com.dajudge.s3operator.api;
 
 public class S3BucketSpec {
-    private String instanceRef;
-    private String ownerRef;
+    private String backendRef;
+    private String userRef;
     private String bucketName;
     private DeletionPolicy deletionPolicy = DeletionPolicy.RETAIN;
 
-    public String getInstanceRef() { return instanceRef; }
-    public void setInstanceRef(String instanceRef) { this.instanceRef = instanceRef; }
-    public String getOwnerRef() { return ownerRef; }
-    public void setOwnerRef(String ownerRef) { this.ownerRef = ownerRef; }
+    public String getBackendRef() { return backendRef; }
+    public void setBackendRef(String backendRef) { this.backendRef = backendRef; }
+    public String getUserRef() { return userRef; }
+    public void setUserRef(String userRef) { this.userRef = userRef; }
     public String getBucketName() { return bucketName; }
     public void setBucketName(String bucketName) { this.bucketName = bucketName; }
     public DeletionPolicy getDeletionPolicy() { return deletionPolicy; }

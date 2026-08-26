@@ -1,6 +1,6 @@
 package com.dajudge.s3operator.api;
 
-public class S3InstanceStatus {
+public class S3BackendStatus {
     private String state;
     private String message;
 

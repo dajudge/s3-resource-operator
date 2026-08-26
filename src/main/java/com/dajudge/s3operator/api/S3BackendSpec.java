@@ -1,6 +1,6 @@
 package com.dajudge.s3operator.api;
 
-public class S3InstanceSpec {
+public class S3BackendSpec {
     private String provider = "versity";
     private String endpoint;
     private SecretRef adminCredentialsSecretRef;

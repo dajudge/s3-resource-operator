@@ -13,6 +13,7 @@
     <kindcontainer.version>2.0.0</kindcontainer.version>
     <testcontainers.version>2.0.2</testcontainers.version>
     <aws.sdk.version>2.43.2</aws.sdk.version>
+    <awaitility.version>4.3.0</awaitility.version>
   </properties>
 
   <dependencyManagement>
@@ -58,6 +59,12 @@
       <groupId>org.assertj</groupId>
       <artifactId>assertj-core</artifactId>
       <version>3.27.6</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.awaitility</groupId>
+      <artifactId>awaitility</artifactId>
+      <version>${awaitility.version}</version>
       <scope>test</scope>
     </dependency>
     <dependency>
