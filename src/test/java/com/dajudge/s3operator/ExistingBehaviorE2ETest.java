@@ -10,10 +10,10 @@ import com.dajudge.s3operator.provider.VersityS3Provider;
 import io.fabric8.kubernetes.api.model.Condition;
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
-import io.fabric8.kubernetes.api.model.OwnerReference;
 import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.api.model.SecretBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
+import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
@@ -31,6 +31,7 @@ import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
+import java.io.ByteArrayInputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -39,6 +40,7 @@ import java.time.Duration;
 import java.util.Base64;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
 @QuarkusTest
@@ -84,7 +86,6 @@ class ExistingBehaviorE2ETest {
         }
         client.resources(S3Bucket.class).inNamespace(NS).withName("defaults-bucket").delete();
         awaitDeleted(S3Bucket.class, "defaults-bucket");
-        // Default RETAIN keeps the external bucket.
         try (S3Client s3 = s3(secretValue(secret, "accessKey"), secretValue(secret, "secretKey"), endpoint)) {
             awaitAccessible(s3, "defaults-bucket");
         }
@@ -96,7 +97,7 @@ class ExistingBehaviorE2ETest {
         createAdminSecret("secret-life-admin");
         createBackend("secret-life-backend", endpoint, "secret-life-admin");
         createUser("secret-life-user", "secret-life-backend", null, null);
-        S3User initialUser = awaitUser("secret-life-user", "True", "Reconciled");
+        awaitUser("secret-life-user", "True", "Reconciled");
         Secret initial = awaitSecret("secret-life-user-s3");
         String access = secretValue(initial, "accessKey");
         String originalSecret = secretValue(initial, "secretKey");
@@ -221,6 +222,64 @@ class ExistingBehaviorE2ETest {
         assertThat(buckets).contains("kind: S3Bucket", "plural: s3buckets", "RETAIN", "DELETE");
         assertThat(users).contains("kind: S3User", "plural: s3users");
         assertThat(backends).contains("kind: S3Backend", "plural: s3backends");
+    }
+
+    @Test
+    void rawApiRoundTripAppliesDefaultsAndRejectsInvalidEnum() {
+        createRaw("""
+                apiVersion: s3.dajudge.com/v1alpha1
+                kind: S3Backend
+                metadata:
+                  name: raw-default-backend
+                spec:
+                  endpoint: http://127.0.0.1:1
+                  adminCredentialsSecretRef:
+                    name: raw-missing-admin
+                """);
+        S3Backend backend = client.resources(S3Backend.class).inNamespace(NS).withName("raw-default-backend").get();
+        assertThat(backend.getSpec().getProvider()).isEqualTo("versity");
+
+        createRaw("""
+                apiVersion: s3.dajudge.com/v1alpha1
+                kind: S3User
+                metadata:
+                  name: raw-default-user
+                spec:
+                  backendRef: raw-default-backend
+                """);
+        S3User user = client.resources(S3User.class).inNamespace(NS).withName("raw-default-user").get();
+        assertThat(user.getSpec().getRole()).isEqualTo("user");
+        assertThat(user.getSpec().getSecretName()).isNull();
+
+        createRaw("""
+                apiVersion: s3.dajudge.com/v1alpha1
+                kind: S3Bucket
+                metadata:
+                  name: raw-default-bucket
+                spec:
+                  backendRef: raw-default-backend
+                  userRef: raw-default-user
+                """);
+        S3Bucket bucket = client.resources(S3Bucket.class).inNamespace(NS).withName("raw-default-bucket").get();
+        assertThat(bucket.getSpec().getDeletionPolicy()).isEqualTo(S3BucketSpec.DeletionPolicy.RETAIN);
+        assertThat(bucket.getSpec().getBucketName()).isNull();
+
+        assertThatThrownBy(() -> createRaw("""
+                apiVersion: s3.dajudge.com/v1alpha1
+                kind: S3Bucket
+                metadata:
+                  name: invalid-policy-bucket
+                spec:
+                  backendRef: raw-default-backend
+                  userRef: raw-default-user
+                  deletionPolicy: DESTROY_EVERYTHING
+                """))
+                .isInstanceOf(KubernetesClientException.class);
+    }
+
+    private void createRaw(String yaml) {
+        client.load(new ByteArrayInputStream(yaml.getBytes(StandardCharsets.UTF_8)))
+                .inNamespace(NS).create();
     }
 
     private void createAdminSecret(String name) {
