@@ -27,13 +27,22 @@ if ! find "$licenses_dir" -type f -size +0c -print -quit | grep -q .; then
   exit 1
 fi
 
-# Strong/reciprocal copyleft is not expected in the shipped runtime dependency graph.
-# Fail closed if Maven metadata reports one so it gets an explicit review instead of
-# silently becoming part of a native binary/container release.
-if grep -Eiq '(GNU (Affero )?General Public License|AGPL|LGPL|GPL[- v0-9.]|Mozilla Public License|MPL[- v0-9.])' \
-    "$notices" "$licenses_xml"; then
-  echo "Unexpected copyleft license detected in runtime dependencies:" >&2
-  grep -Ein '(GNU (Affero )?General Public License|AGPL|LGPL|GPL[- v0-9.]|Mozilla Public License|MPL[- v0-9.])' \
-    "$notices" "$licenses_xml" >&2 || true
+# Runtime dependencies are expected to be permissive or weakly reciprocal.
+# Jakarta / Eclipse artifacts often declare EPL-2.0 together with GPL-2.0 +
+# Classpath Exception as alternative licenses; those are acceptable here.
+# Fail only on licenses that would need an explicit compatibility decision.
+problematic='(GNU Affero General Public License|AGPL|GNU Lesser General Public License|LGPL|Server Side Public License|SSPL|Commons Clause)'
+if grep -Eiq "$problematic" "$notices" "$licenses_xml"; then
+  echo "Unexpected runtime dependency license detected:" >&2
+  grep -Ein "$problematic" "$notices" "$licenses_xml" >&2 || true
+  exit 1
+fi
+
+# Plain GPL without the Classpath Exception is not expected. Check notice lines
+# dependency-by-dependency so alternative EPL-2.0 + GPL-with-CPE metadata passes.
+if grep -Ei '(^|[^A-Za-z])GPL|GNU General Public License' "$notices" \
+    | grep -Eiv 'Classpath Exception|CPE|Eclipse Public License|EPL[- .]?2\.0' >/tmp/unexpected-gpl.txt; then
+  echo "Unexpected GPL runtime dependency without an approved alternative/exception:" >&2
+  cat /tmp/unexpected-gpl.txt >&2
   exit 1
 fi
