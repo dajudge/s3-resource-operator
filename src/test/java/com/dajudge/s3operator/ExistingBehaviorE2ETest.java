@@ -219,9 +219,9 @@ class ExistingBehaviorE2ETest {
         String users = Files.readString(Path.of("target/kubernetes/s3users.s3.dajudge.com-v1.yml"));
         String backends = Files.readString(Path.of("target/kubernetes/s3backends.s3.dajudge.com-v1.yml"));
 
-        assertThat(buckets).contains("kind: S3Bucket", "plural: s3buckets", "RETAIN", "DELETE");
-        assertThat(users).contains("kind: S3User", "plural: s3users");
-        assertThat(backends).contains("kind: S3Backend", "plural: s3backends");
+        assertThat(buckets).contains("kind: \"S3Bucket\"", "plural: \"s3buckets\"", "\"RETAIN\"", "\"DELETE\"");
+        assertThat(users).contains("kind: \"S3User\"", "plural: \"s3users\"");
+        assertThat(backends).contains("kind: \"S3Backend\"", "plural: \"s3backends\"");
     }
 
     @Test
