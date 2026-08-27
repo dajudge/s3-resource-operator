@@ -187,6 +187,9 @@
           <minimumTokens>100</minimumTokens>
           <printFailingErrors>true</printFailingErrors>
           <failOnViolation>true</failOnViolation>
+          <rulesets>
+            <ruleset>${project.basedir}/config/pmd-ruleset.xml</ruleset>
+          </rulesets>
         </configuration>
       </plugin>
     </plugins>
