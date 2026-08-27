@@ -28,6 +28,6 @@ helm install s3-resource-operator \
   --set reconciliation.resyncInterval=5m
 ```
 
-Supported values are positive integer durations using `ms`, `s`, `m`, `h`, or `d` suffixes.
+Supported values are positive integer durations using `s`, `m`, or `h` suffixes.
 
 A successful tagged release also creates a GitHub Release for `release/<semver>` with generated release notes and the packaged Helm chart attached. The GitHub Release is created only after the native images and OCI chart have been published successfully.
