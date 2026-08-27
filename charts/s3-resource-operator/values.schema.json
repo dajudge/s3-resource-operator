@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "reconciliation": {
+      "type": "object",
+      "properties": {
+        "resyncInterval": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*(s|m|h)$",
+          "description": "Periodic drift reconciliation interval. Examples: 30s, 1m, 2h."
+        }
+      },
+      "required": ["resyncInterval"]
+    }
+  }
+}

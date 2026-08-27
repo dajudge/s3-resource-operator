@@ -18,6 +18,7 @@ import io.javaoperatorsdk.operator.api.reconciler.Reconciler;
 import io.javaoperatorsdk.operator.api.reconciler.UpdateControl;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -32,6 +33,7 @@ public class S3BucketReconciler implements Reconciler<S3Bucket>, Cleaner<S3Bucke
 
     @Inject KubernetesClient client;
     @Inject VersityS3Provider provider;
+    @ConfigProperty(name = "s3.operator.resync-interval", defaultValue = "1m") Duration resyncInterval;
 
     @Override
     public UpdateControl<S3Bucket> reconcile(S3Bucket bucket, Context<S3Bucket> context) {
@@ -48,7 +50,7 @@ public class S3BucketReconciler implements Reconciler<S3Bucket>, Cleaner<S3Bucke
 
             S3BucketStatus status = status(bucket);
             setCondition(bucket, status, "True", "Reconciled", "Versity bucket is ready");
-            return UpdateControl.patchStatus(bucket);
+            return UpdateControl.patchStatus(bucket).rescheduleAfter(resyncInterval);
         } catch (RuntimeException e) {
             S3BucketStatus status = status(bucket);
             setCondition(bucket, status, "False", failureReason(e), e.getMessage());

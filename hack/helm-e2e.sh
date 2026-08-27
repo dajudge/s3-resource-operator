@@ -4,6 +4,7 @@ set -euo pipefail
 cluster_name="${KIND_CLUSTER_NAME:-helm-e2e}"
 image="${HELM_E2E_IMAGE:-s3-resource-operator:ci}"
 release="${HELM_E2E_RELEASE:-s3-resource-operator}"
+resync_interval="${HELM_E2E_RESYNC_INTERVAL:-17s}"
 
 image_repository="${image%:*}"
 image_tag="${image##*:}"
@@ -33,6 +34,7 @@ if ! helm install "$release" charts/s3-resource-operator \
   --set image.repository="$image_repository" \
   --set image.tag="$image_tag" \
   --set image.pullPolicy=IfNotPresent \
+  --set reconciliation.resyncInterval="$resync_interval" \
   --wait \
   --timeout=120s; then
   dump_diagnostics
@@ -42,9 +44,11 @@ fi
 deployment="$(kubectl get deployment -l "app.kubernetes.io/instance=${release}" -o jsonpath='{.items[0].metadata.name}')"
 service_account="$(kubectl get deployment "$deployment" -o jsonpath='{.spec.template.spec.serviceAccountName}')"
 subject="system:serviceaccount:default:${service_account}"
+configured_resync="$(kubectl get deployment "$deployment" -o jsonpath='{.spec.template.spec.containers[?(@.name=="operator")].env[?(@.name=="S3_OPERATOR_RESYNC_INTERVAL")].value}')"
 
 test -n "$deployment"
 test -n "$service_account"
+test "$configured_resync" = "$resync_interval"
 test "$(kubectl auth can-i get s3users.s3.dajudge.com --as="$subject")" = yes
 test "$(kubectl auth can-i patch s3users.s3.dajudge.com/status --as="$subject")" = yes
 test "$(kubectl auth can-i get s3buckets.s3.dajudge.com --as="$subject")" = yes

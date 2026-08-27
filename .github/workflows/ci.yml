@@ -39,6 +39,13 @@ jobs:
           rendered="$(helm template s3-resource-operator charts/s3-resource-operator --include-crds)"
           grep -F 'image: "dajudge/s3-resource-operator:dev"' <<<"$rendered"
           grep -F 'name: s3buckets.s3.dajudge.com' <<<"$rendered"
+          grep -A1 -F 'name: S3_OPERATOR_RESYNC_INTERVAL' <<<"$rendered" | grep -F 'value: "1m"'
+          for invalid in garbage 250ms 1d; do
+            if helm template s3-resource-operator charts/s3-resource-operator --set reconciliation.resyncInterval="$invalid" >/dev/null 2>&1; then
+              echo "invalid reconciliation.resyncInterval unexpectedly accepted: $invalid" >&2
+              exit 1
+            fi
+          done
 
       - name: Create Kind cluster
         uses: helm/kind-action@v1.14.0
