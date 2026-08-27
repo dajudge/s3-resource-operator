@@ -9,6 +9,9 @@ imagePullSecrets: []
 nameOverride: "s3-resource-operator"
 fullnameOverride: ""
 
+reconciliation:
+  resyncInterval: 1m
+
 serviceAccount:
   create: true
   name: ""
