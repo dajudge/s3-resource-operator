@@ -323,10 +323,11 @@ class ExistingBehaviorE2ETest {
     }
 
     private void forceUserReconcile(String name, String role) {
-        client.resources(S3User.class).inNamespace(NS).withName(name).edit(user -> {
-            user.getSpec().setRole(role);
-            return user;
-        });
+        await().atMost(TIMEOUT).ignoreException(KubernetesClientException.class).untilAsserted(() ->
+                client.resources(S3User.class).inNamespace(NS).withName(name).edit(user -> {
+                    user.getSpec().setRole(role);
+                    return user;
+                }));
     }
 
     private S3User awaitUser(String name, String status, String reason) {
