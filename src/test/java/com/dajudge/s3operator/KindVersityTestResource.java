@@ -6,6 +6,7 @@ import io.fabric8.kubernetes.client.KubernetesClientBuilder;
 import io.fabric8.kubernetes.client.LocalPortForward;
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
@@ -35,6 +36,8 @@ public class KindVersityTestResource implements QuarkusTestResourceLifecycleMana
                     .withConfig(fromKubeconfig(kube.getKubeconfig()))
                     .build();
 
+            installCrds();
+
             client.apps().deployments()
                     .inNamespace("default")
                     .withName("versitygw")
@@ -52,6 +55,13 @@ public class KindVersityTestResource implements QuarkusTestResourceLifecycleMana
         } catch (Exception e) {
             stop();
             throw new RuntimeException("Unable to start Kindcontainer/Versity test environment", e);
+        }
+    }
+
+    private void installCrds() throws Exception {
+        Path crds = Path.of("charts/s3-resource-operator/crds/s3.dajudge.com.yaml");
+        try (InputStream input = Files.newInputStream(crds)) {
+            client.load(input).createOrReplace();
         }
     }
 
