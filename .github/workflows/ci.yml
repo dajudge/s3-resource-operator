@@ -86,3 +86,33 @@ jobs:
 
       - name: Build native executable
         run: mvn --batch-mode --no-transfer-progress package -Dnative -Dquarkus.native.container-build=true -DskipUnitTests=true
+
+      - name: Build and smoke-test native container
+        shell: bash
+        run: |
+          set -euo pipefail
+          runner="$(find target -maxdepth 1 -type f -name '*-runner' -print -quit)"
+          test -n "$runner"
+          docker build \
+            -f src/main/docker/Dockerfile.native \
+            --build-arg BINARY="$runner" \
+            -t s3-resource-operator:native-ci \
+            .
+          docker run -d \
+            --name s3-resource-operator-native-ci \
+            -e QUARKUS_OPERATOR_SDK_START_OPERATOR=false \
+            -p 127.0.0.1:18080:8080 \
+            s3-resource-operator:native-ci
+          trap 'docker logs s3-resource-operator-native-ci || true; docker rm -f s3-resource-operator-native-ci >/dev/null 2>&1 || true' EXIT
+          for _ in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:18080/q/health >/dev/null; then
+              exit 0
+            fi
+            if ! docker inspect -f '{{.State.Running}}' s3-resource-operator-native-ci | grep -q true; then
+              echo 'Native container exited before becoming healthy' >&2
+              exit 1
+            fi
+            sleep 1
+          done
+          echo 'Native container did not become healthy' >&2
+          exit 1
