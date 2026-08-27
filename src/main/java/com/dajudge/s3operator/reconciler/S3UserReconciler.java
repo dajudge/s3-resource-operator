@@ -40,11 +40,11 @@ import static com.dajudge.s3operator.reconciler.ReconciliationException.Reason.U
 @ControllerConfiguration
 public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
     private static final SecureRandom RANDOM = new SecureRandom();
-    private static final Duration RETRY_DELAY = Duration.ofSeconds(5);
 
     @Inject KubernetesClient client;
     @Inject VersityS3Provider provider;
     @ConfigProperty(name = "s3.operator.resync-interval", defaultValue = "1m") Duration resyncInterval;
+    @ConfigProperty(name = "s3.operator.retry-delay", defaultValue = "5s") Duration retryDelay;
 
     @Override
     public UpdateControl<S3User> reconcile(S3User user, Context<S3User> context) {
@@ -84,7 +84,7 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
         } catch (ReconciliationException e) {
             S3UserStatus status = status(user);
             setCondition(user, status, "False", e.reason().conditionReason(), e.getMessage());
-            return UpdateControl.patchStatus(user).rescheduleAfter(RETRY_DELAY);
+            return UpdateControl.patchStatus(user).rescheduleAfter(retryDelay);
         }
     }
 
