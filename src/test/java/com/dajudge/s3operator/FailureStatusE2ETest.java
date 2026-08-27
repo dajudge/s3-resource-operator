@@ -51,28 +51,44 @@ class FailureStatusE2ETest {
     }
 
     @Test
-    void reportsEveryFailureReason() {
-        createAdminSecret("taxonomy-admin");
+    void reportsEveryUserFailureReason() {
+        createAdminSecret("user-taxonomy-admin");
 
-        createBackend("unsupported-backend", "not-versity", endpoint, "taxonomy-admin");
-        createUser("unsupported-user", "unsupported-backend");
+        createBackend("unsupported-user-backend", "not-versity", endpoint, "user-taxonomy-admin");
+        createUser("unsupported-user", "unsupported-user-backend");
         awaitUserCondition("unsupported-user", "False", "UnsupportedProvider");
 
-        createBackend("provider-error-backend", "versity", "http://127.0.0.1:1", "taxonomy-admin");
-        createUser("provider-error-user", "provider-error-backend");
+        createBackend("provider-error-user-backend", "versity", "http://127.0.0.1:1", "user-taxonomy-admin");
+        createUser("provider-error-user", "provider-error-user-backend");
         awaitUserCondition("provider-error-user", "False", "ProviderError");
 
-        createBackend("invalid-admin-backend", "versity", endpoint, "invalid-admin");
-        client.secrets().resource(new SecretBuilder().withNewMetadata().withName("invalid-admin").withNamespace(NS).endMetadata()
+        createBackend("invalid-admin-user-backend", "versity", endpoint, "invalid-user-admin");
+        client.secrets().resource(new SecretBuilder().withNewMetadata().withName("invalid-user-admin").withNamespace(NS).endMetadata()
                 .addToStringData("accessKey", "test-root-access").build()).create();
-        createUser("invalid-admin-user", "invalid-admin-backend");
+        createUser("invalid-admin-user", "invalid-admin-user-backend");
         awaitUserCondition("invalid-admin-user", "False", "InvalidCredentialsSecret");
+    }
 
-        createBackend("bucket-taxonomy-backend", "versity", endpoint, "taxonomy-admin");
-        createUser("bucket-owner", "bucket-taxonomy-backend");
+    @Test
+    void reportsEveryBucketFailureReason() {
+        createAdminSecret("bucket-taxonomy-admin");
+        createBackend("bucket-good-backend", "versity", endpoint, "bucket-taxonomy-admin");
+        createUser("bucket-owner", "bucket-good-backend");
         awaitUserCondition("bucket-owner", "True", "Reconciled");
+
+        createBucket("missing-backend-bucket", "does-not-exist", "bucket-owner");
+        Condition missingBackend = awaitBucketCondition("missing-backend-bucket", "False", "BackendNotFound");
+        assertStableBucketCondition("missing-backend-bucket", missingBackend);
+
+        createBackend("unsupported-bucket-backend", "not-versity", endpoint, "bucket-taxonomy-admin");
+        createBucket("unsupported-provider-bucket", "unsupported-bucket-backend", "bucket-owner");
+        awaitBucketCondition("unsupported-provider-bucket", "False", "UnsupportedProvider");
+
+        createBucket("missing-user-bucket-taxonomy", "bucket-good-backend", "does-not-exist");
+        awaitBucketCondition("missing-user-bucket-taxonomy", "False", "UserNotFound");
+
         client.secrets().inNamespace(NS).withName("bucket-owner-s3").delete();
-        createBucket("missing-user-credentials-bucket", "bucket-taxonomy-backend", "bucket-owner");
+        createBucket("missing-user-credentials-bucket", "bucket-good-backend", "bucket-owner");
         awaitBucketCondition("missing-user-credentials-bucket", "False", "UserCredentialsNotFound");
 
         client.secrets().resource(new SecretBuilder().withNewMetadata().withName("bucket-owner-s3").withNamespace(NS).endMetadata()
@@ -80,15 +96,18 @@ class FailureStatusE2ETest {
         awaitBucketCondition("missing-user-credentials-bucket", "False", "InvalidCredentialsSecret");
 
         client.secrets().inNamespace(NS).withName("bucket-owner-s3").delete();
-        client.resources(S3User.class).inNamespace(NS).withName("bucket-owner").edit(user -> {
-            user.getSpec().setSecretName("replacement-owner-s3");
-            return user;
-        });
-        client.secrets().resource(new SecretBuilder().withNewMetadata().withName("replacement-owner-s3").withNamespace(NS).endMetadata()
+        client.secrets().resource(new SecretBuilder().withNewMetadata().withName("bucket-owner-s3").withNamespace(NS).endMetadata()
                 .addToStringData("accessKey", "default.bucket-owner")
-                .addToStringData("secretKey", "replacement-secret")
+                .addToStringData("secretKey", "not-used-for-admin-create")
                 .addToStringData("endpoint", endpoint).build()).create();
-        awaitBucketCondition("missing-user-credentials-bucket", "False", "ProviderError");
+
+        createBackend("missing-admin-bucket-backend", "versity", endpoint, "missing-bucket-admin");
+        createBucket("missing-admin-bucket", "missing-admin-bucket-backend", "bucket-owner");
+        awaitBucketCondition("missing-admin-bucket", "False", "AdminCredentialsNotFound");
+
+        createBackend("provider-error-bucket-backend", "versity", "http://127.0.0.1:1", "bucket-taxonomy-admin");
+        createBucket("provider-error-bucket", "provider-error-bucket-backend", "bucket-owner");
+        awaitBucketCondition("provider-error-bucket", "False", "ProviderError");
     }
 
     private void createAdminSecret(String name) {
@@ -171,6 +190,17 @@ class FailureStatusE2ETest {
         await().during(Duration.ofSeconds(6)).atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
             S3User user = client.resources(S3User.class).inNamespace(NS).withName(name).get();
             Condition current = user.getStatus().getConditions().stream()
+                    .filter(c -> "Ready".equals(c.getType())).findFirst().orElseThrow();
+            assertThat(current.getStatus()).isEqualTo(original.getStatus());
+            assertThat(current.getReason()).isEqualTo(original.getReason());
+            assertThat(current.getLastTransitionTime()).isEqualTo(original.getLastTransitionTime());
+        });
+    }
+
+    private void assertStableBucketCondition(String name, Condition original) {
+        await().during(Duration.ofSeconds(6)).atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+            S3Bucket bucket = client.resources(S3Bucket.class).inNamespace(NS).withName(name).get();
+            Condition current = bucket.getStatus().getConditions().stream()
                     .filter(c -> "Ready".equals(c.getType())).findFirst().orElseThrow();
             assertThat(current.getStatus()).isEqualTo(original.getStatus());
             assertThat(current.getReason()).isEqualTo(original.getReason());
