@@ -7,7 +7,6 @@ import com.dajudge.s3operator.api.S3BucketStatus;
 import com.dajudge.s3operator.api.S3User;
 import com.dajudge.s3operator.provider.S3ProviderException;
 import com.dajudge.s3operator.provider.VersityS3Provider;
-import io.fabric8.kubernetes.api.model.Condition;
 import io.fabric8.kubernetes.api.model.ConditionBuilder;
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.Secret;
@@ -24,19 +23,16 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.time.Instant;
-import java.util.Base64;
 import java.util.List;
 
-import static com.dajudge.s3operator.reconciler.ReconciliationException.Reason.ADMIN_CREDENTIALS_NOT_FOUND;
-import static com.dajudge.s3operator.reconciler.ReconciliationException.Reason.BACKEND_NOT_FOUND;
-import static com.dajudge.s3operator.reconciler.ReconciliationException.Reason.INVALID_CREDENTIALS_SECRET;
 import static com.dajudge.s3operator.reconciler.ReconciliationException.Reason.PROVIDER_ERROR;
-import static com.dajudge.s3operator.reconciler.ReconciliationException.Reason.UNSUPPORTED_PROVIDER;
 import static com.dajudge.s3operator.reconciler.ReconciliationException.Reason.USER_CREDENTIALS_NOT_FOUND;
 import static com.dajudge.s3operator.reconciler.ReconciliationException.Reason.USER_NOT_FOUND;
+import static com.dajudge.s3operator.reconciler.ReconcilerSupport.requireAdminSecret;
+import static com.dajudge.s3operator.reconciler.ReconcilerSupport.requireBackend;
+import static com.dajudge.s3operator.reconciler.ReconcilerSupport.secretValue;
+import static com.dajudge.s3operator.reconciler.ReconcilerSupport.transitionTime;
 
 @ApplicationScoped
 @ControllerConfiguration
@@ -51,10 +47,10 @@ public class S3BucketReconciler implements Reconciler<S3Bucket>, Cleaner<S3Bucke
         try {
             ResourceValidation.validateBucket(bucket);
             String namespace = bucket.getMetadata().getNamespace();
-            S3Backend backend = requireBackend(namespace, bucket.getSpec().getBackendRef());
+            S3Backend backend = requireBackend(client, provider, namespace, bucket.getSpec().getBackendRef());
             S3User user = requireUser(namespace, bucket.getSpec().getUserRef());
             Secret userSecret = requireUserSecret(namespace, user);
-            Secret adminSecret = requireAdminSecret(namespace, backend);
+            Secret adminSecret = requireAdminSecret(client, namespace, backend);
 
             try {
                 provider.createBucket(backend.getSpec().getEndpoint(),
@@ -128,16 +124,6 @@ public class S3BucketReconciler implements Reconciler<S3Bucket>, Cleaner<S3Bucke
         return bucket.getMetadata().getNamespace().equals(secondary.getMetadata().getNamespace());
     }
 
-    private S3Backend requireBackend(String namespace, String name) {
-        S3Backend backend = client.resources(S3Backend.class).inNamespace(namespace).withName(name).get();
-        if (backend == null) throw new ReconciliationException(BACKEND_NOT_FOUND, "S3Backend not found: " + name);
-        ResourceValidation.validateBackend(backend);
-        if (!provider.type().equals(backend.getSpec().getProvider()))
-            throw new ReconciliationException(UNSUPPORTED_PROVIDER,
-                    "Unsupported S3 provider: " + backend.getSpec().getProvider());
-        return backend;
-    }
-
     private S3User requireUser(String namespace, String name) {
         S3User user = client.resources(S3User.class).inNamespace(namespace).withName(name).get();
         if (user == null) throw new ReconciliationException(USER_NOT_FOUND, "S3User not found: " + name);
@@ -150,14 +136,6 @@ public class S3BucketReconciler implements Reconciler<S3Bucket>, Cleaner<S3Bucke
         Secret secret = client.secrets().inNamespace(namespace).withName(name).get();
         if (secret == null) throw new ReconciliationException(USER_CREDENTIALS_NOT_FOUND,
                 "User credentials Secret not found: " + name);
-        return secret;
-    }
-
-    private Secret requireAdminSecret(String namespace, S3Backend backend) {
-        Secret secret = client.secrets().inNamespace(namespace)
-                .withName(backend.getSpec().getAdminCredentialsSecretRef().getName()).get();
-        if (secret == null) throw new ReconciliationException(ADMIN_CREDENTIALS_NOT_FOUND,
-                "Admin credentials Secret not found");
         return secret;
     }
 
@@ -181,20 +159,5 @@ public class S3BucketReconciler implements Reconciler<S3Bucket>, Cleaner<S3Bucke
     private static String bucketName(S3Bucket bucket) {
         return bucket.getSpec().getBucketName() == null || bucket.getSpec().getBucketName().isBlank()
                 ? bucket.getMetadata().getName() : bucket.getSpec().getBucketName();
-    }
-
-    private static String transitionTime(List<Condition> conditions, String status, String reason) {
-        if (conditions != null) for (Condition c : conditions)
-            if ("Ready".equals(c.getType()) && status.equals(c.getStatus()) && reason.equals(c.getReason())
-                    && c.getLastTransitionTime() != null) return c.getLastTransitionTime();
-        return Instant.now().toString();
-    }
-
-    private static String secretValue(Secret secret, String key) {
-        if (secret.getData() != null && secret.getData().containsKey(key))
-            return new String(Base64.getDecoder().decode(secret.getData().get(key)), StandardCharsets.UTF_8);
-        if (secret.getStringData() != null && secret.getStringData().containsKey(key)) return secret.getStringData().get(key);
-        throw new ReconciliationException(INVALID_CREDENTIALS_SECRET,
-                "Missing key '" + key + "' in Secret " + secret.getMetadata().getName());
     }
 }
