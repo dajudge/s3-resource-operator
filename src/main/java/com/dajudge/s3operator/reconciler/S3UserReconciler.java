@@ -36,8 +36,6 @@ import static com.dajudge.s3operator.reconciler.ReconcilerSupport.transitionTime
 @ApplicationScoped
 @ControllerConfiguration
 public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
-    private static final SecureRandom RANDOM = new SecureRandom();
-
     @Inject KubernetesClient client;
     @Inject VersityS3Provider provider;
     @ConfigProperty(name = "s3.operator.resync-interval", defaultValue = "1m") Duration resyncInterval;
@@ -160,7 +158,7 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
 
     private static String randomSecret() {
         byte[] bytes = new byte[32];
-        RANDOM.nextBytes(bytes);
+        new SecureRandom().nextBytes(bytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 }
