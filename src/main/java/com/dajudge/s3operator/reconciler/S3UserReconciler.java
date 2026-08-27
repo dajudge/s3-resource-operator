@@ -49,6 +49,7 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
     @Override
     public UpdateControl<S3User> reconcile(S3User user, Context<S3User> context) {
         try {
+            ResourceValidation.validateUser(user);
             String namespace = user.getMetadata().getNamespace();
             S3Backend backend = requireBackend(namespace, user.getSpec().getBackendRef());
             Secret adminSecret = requireAdminSecret(namespace, backend);
@@ -91,10 +92,12 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
     @Override
     public List<EventSource<?, S3User>> prepareEventSources(EventSourceContext<S3User> context) {
         var backends = RelatedResourceEventSources.informer(S3Backend.class, S3User.class, context,
-                backend -> RelatedResourceEventSources.matching(context, user -> sameNamespace(user, backend)
+                backend -> RelatedResourceEventSources.matching(context, user -> ResourceValidation.hasUsableUserSpec(user)
+                        && sameNamespace(user, backend)
                         && backend.getMetadata().getName().equals(user.getSpec().getBackendRef())));
         var secrets = RelatedResourceEventSources.informer(Secret.class, S3User.class, context,
-                secret -> RelatedResourceEventSources.matching(context, user -> secretAffectsUser(secret, user)));
+                secret -> RelatedResourceEventSources.matching(context,
+                        user -> ResourceValidation.hasUsableUserSpec(user) && secretAffectsUser(secret, user)));
         return List.of(backends, secrets);
     }
 
@@ -102,14 +105,17 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
     public DeleteControl cleanup(S3User user, Context<S3User> context) {
         String namespace = user.getMetadata().getNamespace();
         boolean referenced = client.resources(S3Bucket.class).inNamespace(namespace).list().getItems().stream()
-                .anyMatch(bucket -> user.getMetadata().getName().equals(bucket.getSpec().getUserRef()));
+                .anyMatch(bucket -> bucket.getSpec() != null
+                        && user.getMetadata().getName().equals(bucket.getSpec().getUserRef()));
         if (referenced) {
             throw new IllegalStateException("S3User is still referenced by an S3Bucket: " + user.getMetadata().getName());
         }
 
+        if (!ResourceValidation.hasUsableUserSpec(user)) return DeleteControl.defaultDelete();
         S3Backend backend = client.resources(S3Backend.class).inNamespace(namespace)
                 .withName(user.getSpec().getBackendRef()).get();
-        if (backend == null || !provider.type().equals(backend.getSpec().getProvider())) return DeleteControl.defaultDelete();
+        if (!ResourceValidation.hasUsableBackendSpec(backend)
+                || !provider.type().equals(backend.getSpec().getProvider())) return DeleteControl.defaultDelete();
 
         Secret adminSecret = client.secrets().inNamespace(namespace)
                 .withName(backend.getSpec().getAdminCredentialsSecretRef().getName()).get();
@@ -130,7 +136,7 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
         if (secret.getMetadata().getName().equals(secretName(user))) return true;
         S3Backend backend = client.resources(S3Backend.class).inNamespace(user.getMetadata().getNamespace())
                 .withName(user.getSpec().getBackendRef()).get();
-        return backend != null && backend.getSpec().getAdminCredentialsSecretRef() != null
+        return ResourceValidation.hasUsableBackendSpec(backend)
                 && secret.getMetadata().getName().equals(backend.getSpec().getAdminCredentialsSecretRef().getName());
     }
 
@@ -141,6 +147,7 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
     private S3Backend requireBackend(String namespace, String name) {
         S3Backend backend = client.resources(S3Backend.class).inNamespace(namespace).withName(name).get();
         if (backend == null) throw new ReconciliationException(BACKEND_NOT_FOUND, "S3Backend not found: " + name);
+        ResourceValidation.validateBackend(backend);
         if (!provider.type().equals(backend.getSpec().getProvider()))
             throw new ReconciliationException(UNSUPPORTED_PROVIDER,
                     "Unsupported S3 provider: " + backend.getSpec().getProvider());
