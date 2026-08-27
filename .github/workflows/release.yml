@@ -4,12 +4,43 @@ on:
   push:
     tags:
       - 'release/*'
+    branches:
+      - 'release-trigger/*'
 
 permissions:
   contents: read
 
 jobs:
+  bootstrap-tag:
+    if: startsWith(github.ref, 'refs/heads/release-trigger/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate version and create release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#release-trigger/}"
+          semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?$'
+          if [[ ! "$version" =~ $semver ]]; then
+            echo "Invalid release trigger: $GITHUB_REF_NAME" >&2
+            echo "Expected release-trigger/<semver>, for example release-trigger/1.2.3-rc.1" >&2
+            exit 1
+          fi
+          tag="release/${version}"
+          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
+            echo "Release tag already exists: ${tag}" >&2
+            exit 1
+          fi
+          git tag "$tag" "$GITHUB_SHA"
+          git push origin "refs/tags/${tag}"
+
   validate:
+    if: startsWith(github.ref, 'refs/tags/release/')
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -35,6 +66,7 @@ jobs:
           fi
 
   verify:
+    if: startsWith(github.ref, 'refs/tags/release/')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
