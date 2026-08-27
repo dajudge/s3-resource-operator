@@ -49,6 +49,7 @@ public class S3BucketReconciler implements Reconciler<S3Bucket>, Cleaner<S3Bucke
     @Override
     public UpdateControl<S3Bucket> reconcile(S3Bucket bucket, Context<S3Bucket> context) {
         try {
+            ResourceValidation.validateBucket(bucket);
             String namespace = bucket.getMetadata().getNamespace();
             S3Backend backend = requireBackend(namespace, bucket.getSpec().getBackendRef());
             S3User user = requireUser(namespace, bucket.getSpec().getUserRef());
@@ -76,24 +77,31 @@ public class S3BucketReconciler implements Reconciler<S3Bucket>, Cleaner<S3Bucke
     @Override
     public List<EventSource<?, S3Bucket>> prepareEventSources(EventSourceContext<S3Bucket> context) {
         var backends = RelatedResourceEventSources.informer(S3Backend.class, S3Bucket.class, context,
-                backend -> RelatedResourceEventSources.matching(context, bucket -> sameNamespace(bucket, backend)
+                backend -> RelatedResourceEventSources.matching(context, bucket -> ResourceValidation.hasUsableBucketSpec(bucket)
+                        && sameNamespace(bucket, backend)
                         && backend.getMetadata().getName().equals(bucket.getSpec().getBackendRef())));
         var users = RelatedResourceEventSources.informer(S3User.class, S3Bucket.class, context,
-                user -> RelatedResourceEventSources.matching(context, bucket -> sameNamespace(bucket, user)
+                user -> RelatedResourceEventSources.matching(context, bucket -> ResourceValidation.hasUsableBucketSpec(bucket)
+                        && sameNamespace(bucket, user)
                         && user.getMetadata().getName().equals(bucket.getSpec().getUserRef())));
         var secrets = RelatedResourceEventSources.informer(Secret.class, S3Bucket.class, context,
-                secret -> RelatedResourceEventSources.matching(context, bucket -> secretAffectsBucket(secret, bucket)));
+                secret -> RelatedResourceEventSources.matching(context,
+                        bucket -> ResourceValidation.hasUsableBucketSpec(bucket) && secretAffectsBucket(secret, bucket)));
         return List.of(backends, users, secrets);
     }
 
     @Override
     public DeleteControl cleanup(S3Bucket bucket, Context<S3Bucket> context) {
-        if (bucket.getSpec().getDeletionPolicy() != S3BucketSpec.DeletionPolicy.DELETE) return DeleteControl.defaultDelete();
+        if (!ResourceValidation.hasUsableBucketSpec(bucket)
+                || bucket.getSpec().getDeletionPolicy() != S3BucketSpec.DeletionPolicy.DELETE) {
+            return DeleteControl.defaultDelete();
+        }
 
         String namespace = bucket.getMetadata().getNamespace();
         S3Backend backend = client.resources(S3Backend.class).inNamespace(namespace)
                 .withName(bucket.getSpec().getBackendRef()).get();
-        if (backend == null || !provider.type().equals(backend.getSpec().getProvider())) return DeleteControl.defaultDelete();
+        if (!ResourceValidation.hasUsableBackendSpec(backend)
+                || !provider.type().equals(backend.getSpec().getProvider())) return DeleteControl.defaultDelete();
 
         Secret adminSecret = client.secrets().inNamespace(namespace)
                 .withName(backend.getSpec().getAdminCredentialsSecretRef().getName()).get();
@@ -108,10 +116,11 @@ public class S3BucketReconciler implements Reconciler<S3Bucket>, Cleaner<S3Bucke
         if (!sameNamespace(bucket, secret)) return false;
         String namespace = bucket.getMetadata().getNamespace();
         S3User user = client.resources(S3User.class).inNamespace(namespace).withName(bucket.getSpec().getUserRef()).get();
-        if (user != null && secret.getMetadata().getName().equals(userSecretName(user))) return true;
+        if (ResourceValidation.hasUsableUserSpec(user)
+                && secret.getMetadata().getName().equals(userSecretName(user))) return true;
         S3Backend backend = client.resources(S3Backend.class).inNamespace(namespace)
                 .withName(bucket.getSpec().getBackendRef()).get();
-        return backend != null && backend.getSpec().getAdminCredentialsSecretRef() != null
+        return ResourceValidation.hasUsableBackendSpec(backend)
                 && secret.getMetadata().getName().equals(backend.getSpec().getAdminCredentialsSecretRef().getName());
     }
 
@@ -122,6 +131,7 @@ public class S3BucketReconciler implements Reconciler<S3Bucket>, Cleaner<S3Bucke
     private S3Backend requireBackend(String namespace, String name) {
         S3Backend backend = client.resources(S3Backend.class).inNamespace(namespace).withName(name).get();
         if (backend == null) throw new ReconciliationException(BACKEND_NOT_FOUND, "S3Backend not found: " + name);
+        ResourceValidation.validateBackend(backend);
         if (!provider.type().equals(backend.getSpec().getProvider()))
             throw new ReconciliationException(UNSUPPORTED_PROVIDER,
                     "Unsupported S3 provider: " + backend.getSpec().getProvider());
@@ -131,6 +141,7 @@ public class S3BucketReconciler implements Reconciler<S3Bucket>, Cleaner<S3Bucke
     private S3User requireUser(String namespace, String name) {
         S3User user = client.resources(S3User.class).inNamespace(namespace).withName(name).get();
         if (user == null) throw new ReconciliationException(USER_NOT_FOUND, "S3User not found: " + name);
+        ResourceValidation.validateUser(user);
         return user;
     }
 
