@@ -8,18 +8,36 @@ release="${HELM_E2E_RELEASE:-s3-resource-operator}"
 image_repository="${image%:*}"
 image_tag="${image##*:}"
 
+dump_diagnostics() {
+  echo '--- Helm release ---'
+  helm status "$release" || true
+  echo '--- Deployments ---'
+  kubectl get deployments -o wide || true
+  echo '--- Pods ---'
+  kubectl get pods -o wide || true
+  echo '--- Pod descriptions ---'
+  kubectl describe pods -l "app.kubernetes.io/instance=${release}" || true
+  echo '--- Operator logs ---'
+  kubectl logs -l "app.kubernetes.io/instance=${release}" --all-containers --tail=200 || true
+  echo '--- Recent events ---'
+  kubectl get events --sort-by=.lastTimestamp | tail -100 || true
+}
+
 docker build -f src/main/docker/Dockerfile.jvm -t "$image" .
 kind load docker-image "$image" --name "$cluster_name"
 
 kubectl apply -f src/test/resources/versitygw.yaml
 kubectl rollout status deployment/versitygw --timeout=120s
 
-helm install "$release" charts/s3-resource-operator \
+if ! helm install "$release" charts/s3-resource-operator \
   --set image.repository="$image_repository" \
   --set image.tag="$image_tag" \
   --set image.pullPolicy=IfNotPresent \
   --wait \
-  --timeout=120s
+  --timeout=120s; then
+  dump_diagnostics
+  exit 1
+fi
 
 deployment="$(kubectl get deployment -l "app.kubernetes.io/instance=${release}" -o jsonpath='{.items[0].metadata.name}')"
 service_account="$(kubectl get deployment "$deployment" -o jsonpath='{.spec.template.spec.serviceAccountName}')"
@@ -32,6 +50,7 @@ test "$(kubectl auth can-i patch s3users.s3.dajudge.com/status --as="$subject")"
 test "$(kubectl auth can-i get s3buckets.s3.dajudge.com --as="$subject")" = yes
 test "$(kubectl auth can-i patch s3buckets.s3.dajudge.com/status --as="$subject")" = yes
 test "$(kubectl auth can-i get s3backends.s3.dajudge.com --as="$subject")" = yes
+test "$(kubectl auth can-i get customresourcedefinitions.apiextensions.k8s.io --as="$subject")" = yes
 test "$(kubectl auth can-i get secrets --as="$subject")" = yes
 test "$(kubectl auth can-i create secrets --as="$subject")" = yes
 
@@ -77,7 +96,7 @@ for resource in s3user/helm-e2e s3bucket/helm-e2e; do
   done
   if [[ "$ready" != 'True' ]]; then
     kubectl get "$resource" -o yaml || true
-    kubectl logs "deployment/${deployment}" --tail=200 || true
+    dump_diagnostics
     exit 1
   fi
 done
