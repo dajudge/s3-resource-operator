@@ -2,6 +2,7 @@ package com.dajudge.s3operator.reconciler;
 
 public final class ReconciliationException extends RuntimeException {
     public enum Reason {
+        INVALID_SPEC("InvalidSpec"),
         BACKEND_NOT_FOUND("BackendNotFound"),
         UNSUPPORTED_PROVIDER("UnsupportedProvider"),
         USER_NOT_FOUND("UserNotFound"),
