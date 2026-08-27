@@ -36,7 +36,9 @@ jobs:
         run: |
           set -euo pipefail
           helm lint charts/s3-resource-operator
-          helm template s3-resource-operator charts/s3-resource-operator --include-crds >/dev/null
+          rendered="$(helm template s3-resource-operator charts/s3-resource-operator --include-crds)"
+          grep -F 'image: "dajudge/s3-resource-operator:dev"' <<<"$rendered"
+          grep -F 'name: s3buckets.s3.dajudge.com' <<<"$rendered"
 
       - name: Upload test reports
         if: failure()
