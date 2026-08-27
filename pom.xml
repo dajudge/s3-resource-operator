@@ -5,6 +5,14 @@
   <artifactId>s3-resource-operator</artifactId>
   <version>0.1.0-SNAPSHOT</version>
 
+  <licenses>
+    <license>
+      <name>Apache License, Version 2.0</name>
+      <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
   <properties>
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -16,6 +24,7 @@
     <awaitility.version>4.3.0</awaitility.version>
     <spotbugs-maven-plugin.version>4.10.3.0</spotbugs-maven-plugin.version>
     <maven-pmd-plugin.version>3.28.0</maven-pmd-plugin.version>
+    <license-maven-plugin.version>2.7.1</license-maven-plugin.version>
     <skipITs>true</skipITs>
     <skipUnitTests>false</skipUnitTests>
   </properties>
@@ -127,6 +136,42 @@
             <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
           </systemPropertyVariables>
         </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>license-maven-plugin</artifactId>
+        <version>${license-maven-plugin.version}</version>
+        <executions>
+          <execution>
+            <id>runtime-third-party-notices</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>add-third-party</goal>
+            </goals>
+            <configuration>
+              <includedScopes>compile,runtime</includedScopes>
+              <includeTransitiveDependencies>true</includeTransitiveDependencies>
+              <failOnMissing>true</failOnMissing>
+              <sortArtifactByName>true</sortArtifactByName>
+              <thirdPartyFilename>THIRD-PARTY-NOTICES.txt</thirdPartyFilename>
+              <addOutputDirectoryAsResourceDir>false</addOutputDirectoryAsResourceDir>
+            </configuration>
+          </execution>
+          <execution>
+            <id>runtime-license-texts</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>download-licenses</goal>
+            </goals>
+            <configuration>
+              <includedScopes>compile,runtime</includedScopes>
+              <includeTransitiveDependencies>true</includeTransitiveDependencies>
+              <cleanLicensesOutputDirectory>true</cleanLicensesOutputDirectory>
+              <licensesOutputDirectory>${project.build.directory}/generated-resources/licenses</licensesOutputDirectory>
+              <licensesOutputFile>${project.build.directory}/generated-resources/licenses.xml</licensesOutputFile>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
       <plugin>
         <groupId>com.github.spotbugs</groupId>
