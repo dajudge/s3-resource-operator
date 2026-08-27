@@ -78,6 +78,8 @@ class InvalidSpecE2ETest {
         await().atMost(TIMEOUT).untilAsserted(() -> {
             S3User user = client.resources(S3User.class).inNamespace(NS).withName(name).get();
             assertThat(user).isNotNull();
+            assertThat(user.getStatus()).isNotNull();
+            assertThat(user.getStatus().getConditions()).isNotEmpty();
             Condition condition = user.getStatus().getConditions().getFirst();
             assertThat(condition.getStatus()).isEqualTo("False");
             assertThat(condition.getReason()).isEqualTo("InvalidSpec");
@@ -89,6 +91,8 @@ class InvalidSpecE2ETest {
         await().atMost(TIMEOUT).untilAsserted(() -> {
             S3Bucket bucket = client.resources(S3Bucket.class).inNamespace(NS).withName(name).get();
             assertThat(bucket).isNotNull();
+            assertThat(bucket.getStatus()).isNotNull();
+            assertThat(bucket.getStatus().getConditions()).isNotEmpty();
             Condition condition = bucket.getStatus().getConditions().getFirst();
             assertThat(condition.getStatus()).isEqualTo("False");
             assertThat(condition.getReason()).isEqualTo("InvalidSpec");
