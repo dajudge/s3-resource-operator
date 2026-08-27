@@ -84,9 +84,24 @@ user_uid_before="$(kubectl get s3user published-e2e -n "$namespace" -o jsonpath=
 bucket_uid_before="$(kubectl get s3bucket published-e2e -n "$namespace" -o jsonpath='{.metadata.uid}')"
 access_before="$(kubectl get secret published-e2e-s3 -n "$namespace" -o jsonpath='{.data.accessKey}')"
 secret_before="$(kubectl get secret published-e2e-s3 -n "$namespace" -o jsonpath='{.data.secretKey}')"
+pod_uid_before="$(kubectl get pod -n "$namespace" -l "app.kubernetes.io/instance=${release}" -o jsonpath='{.items[0].metadata.uid}')"
 
 test -n "$access_before"
 test -n "$secret_before"
+test -n "$pod_uid_before"
+
+# Helm intentionally does not upgrade CRDs from chart crds/. Apply the HEAD CRDs
+# explicitly before upgrading the workload so schema/served-version changes are
+# exercised against the persisted custom resources.
+kubectl apply -f charts/s3-resource-operator/crds/s3.dajudge.com.yaml
+
+for crd in \
+  s3backends.s3.dajudge.com \
+  s3users.s3.dajudge.com \
+  s3buckets.s3.dajudge.com; do
+  test "$(kubectl get crd "$crd" -o jsonpath='{.metadata.name}')" = "$crd"
+  test "$(kubectl get crd "$crd" -o jsonpath='{.status.conditions[?(@.type=="Established")].status}')" = 'True'
+done
 
 # Upgrade the installed published RC to the chart currently under test while keeping
 # the already-published, tested operator image. This exercises Helm/CRD upgrade safety
@@ -99,7 +114,13 @@ helm upgrade "$release" charts/s3-resource-operator \
   --wait \
   --timeout=180s
 
+# Force a fresh operator process even if the rendered pod template is otherwise
+# identical, then prove the pod was actually replaced before post-upgrade assertions.
+kubectl rollout restart -n "$namespace" deployment/"$deployment"
 kubectl rollout status -n "$namespace" deployment/"$deployment" --timeout=120s
+pod_uid_after="$(kubectl get pod -n "$namespace" -l "app.kubernetes.io/instance=${release}" -o jsonpath='{.items[0].metadata.uid}')"
+test -n "$pod_uid_after"
+test "$pod_uid_after" != "$pod_uid_before"
 
 test "$(kubectl get s3user published-e2e -n "$namespace" -o jsonpath='{.metadata.uid}')" = "$user_uid_before"
 test "$(kubectl get s3bucket published-e2e -n "$namespace" -o jsonpath='{.metadata.uid}')" = "$bucket_uid_before"
@@ -108,10 +129,6 @@ test "$(kubectl get secret published-e2e-s3 -n "$namespace" -o jsonpath='{.data.
 
 wait_ready s3user/published-e2e
 wait_ready s3bucket/published-e2e
-
-test "$(kubectl get crd s3backends.s3.dajudge.com -o jsonpath='{.metadata.name}')" = 's3backends.s3.dajudge.com'
-test "$(kubectl get crd s3users.s3.dajudge.com -o jsonpath='{.metadata.name}')" = 's3users.s3.dajudge.com'
-test "$(kubectl get crd s3buckets.s3.dajudge.com -o jsonpath='{.metadata.name}')" = 's3buckets.s3.dajudge.com'
 
 kubectl delete s3bucket published-e2e -n "$namespace" --wait=true --timeout=120s
 kubectl delete s3user published-e2e -n "$namespace" --wait=true --timeout=120s
