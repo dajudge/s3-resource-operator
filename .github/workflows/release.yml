@@ -127,7 +127,7 @@ jobs:
     env:
       IMAGE: dajudge/s3-resource-operator
       VERSION: ${{ needs.validate.outputs.version }}
-      CHART_OCI_REPOSITORY: oci://registry-1.docker.io/dajudge/charts
+      CHART_OCI_REPOSITORY: oci://registry-1.docker.io/dajudge
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -207,7 +207,7 @@ jobs:
             --destination dist/chart \
             --version "$VERSION" \
             --app-version "$VERSION"
-          chart="dist/chart/s3-resource-operator-${VERSION}.tgz"
+          chart="dist/chart/s3-resource-operator-chart-${VERSION}.tgz"
           rendered="$(helm template s3-resource-operator "$chart")"
           grep -F "image: \"${IMAGE}:${VERSION}\"" <<<"$rendered"
 
@@ -221,4 +221,4 @@ jobs:
               --password-stdin
 
       - name: Push Helm chart OCI artifact
-        run: helm push "dist/chart/s3-resource-operator-${VERSION}.tgz" "$CHART_OCI_REPOSITORY"
+        run: helm push "dist/chart/s3-resource-operator-chart-${VERSION}.tgz" "$CHART_OCI_REPOSITORY"
