@@ -12,4 +12,4 @@ helm install s3-resource-operator \
   --version <semver>
 ```
 
-A successful tagged release also creates a GitHub Release for `release/<semver>` with generated release notes and the packaged Helm chart attached.
+A successful tagged release also creates a GitHub Release for `release/<semver>` with generated release notes and the packaged Helm chart attached. The GitHub Release is created only after the native images and OCI chart have been published successfully.
