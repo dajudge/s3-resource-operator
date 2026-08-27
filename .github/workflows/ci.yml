@@ -65,3 +65,21 @@ jobs:
             target/surefire-reports/**
             target/failsafe-reports/**
           if-no-files-found: ignore
+
+  native-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build native executable
+        run: mvn --batch-mode --no-transfer-progress package -Dnative -Dquarkus.native.container-build=true -DskipUnitTests=true
