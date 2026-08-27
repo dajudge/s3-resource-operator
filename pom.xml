@@ -11,9 +11,11 @@
     <quarkus.platform.version>3.38.3</quarkus.platform.version>
     <quarkus-operator-sdk.version>7.8.0</quarkus-operator-sdk.version>
     <kindcontainer.version>2.0.0</kindcontainer.version>
-    <testcontainers.version>2.0.5</testcontainers.version>
-    <aws.sdk.version>2.54.2</aws.sdk.version>
+    <testcontainers.version>2.0.2</testcontainers.version>
+    <aws.sdk.version>2.43.2</aws.sdk.version>
     <awaitility.version>4.3.0</awaitility.version>
+    <spotbugs-maven-plugin.version>4.10.3.0</spotbugs-maven-plugin.version>
+    <maven-pmd-plugin.version>3.28.0</maven-pmd-plugin.version>
     <skipITs>true</skipITs>
     <skipUnitTests>false</skipUnitTests>
   </properties>
@@ -60,7 +62,7 @@
     <dependency>
       <groupId>org.assertj</groupId>
       <artifactId>assertj-core</artifactId>
-      <version>3.27.7</version>
+      <version>3.27.6</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -113,12 +115,12 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.15.0</version>
+        <version>3.14.0</version>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>3.5.6</version>
+        <version>3.5.3</version>
         <configuration>
           <skipTests>${skipUnitTests}</skipTests>
           <systemPropertyVariables>
@@ -127,9 +129,54 @@
         </configuration>
       </plugin>
       <plugin>
+        <groupId>com.github.spotbugs</groupId>
+        <artifactId>spotbugs-maven-plugin</artifactId>
+        <version>${spotbugs-maven-plugin.version}</version>
+        <executions>
+          <execution>
+            <id>spotbugs-check</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <effort>Max</effort>
+          <threshold>Medium</threshold>
+          <failOnError>true</failOnError>
+          <includeTests>true</includeTests>
+          <excludeFilterFile>${project.basedir}/config/spotbugs-exclude.xml</excludeFilterFile>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-pmd-plugin</artifactId>
+        <version>${maven-pmd-plugin.version}</version>
+        <executions>
+          <execution>
+            <id>pmd-and-cpd-check</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>check</goal>
+              <goal>cpd-check</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <includeTests>true</includeTests>
+          <minimumTokens>100</minimumTokens>
+          <printFailingErrors>true</printFailingErrors>
+          <failOnViolation>true</failOnViolation>
+          <rulesets>
+            <ruleset>${project.basedir}/config/pmd-ruleset.xml</ruleset>
+          </rulesets>
+        </configuration>
+      </plugin>
+      <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-failsafe-plugin</artifactId>
-        <version>3.5.6</version>
+        <version>3.5.3</version>
         <executions>
           <execution>
             <goals>

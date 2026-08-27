@@ -4,8 +4,8 @@ import com.dajudge.s3operator.api.S3Backend;
 import com.dajudge.s3operator.api.S3Bucket;
 import com.dajudge.s3operator.api.S3User;
 import com.dajudge.s3operator.api.S3UserStatus;
+import com.dajudge.s3operator.provider.S3ProviderException;
 import com.dajudge.s3operator.provider.VersityS3Provider;
-import io.fabric8.kubernetes.api.model.Condition;
 import io.fabric8.kubernetes.api.model.ConditionBuilder;
 import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.api.model.SecretBuilder;
@@ -14,35 +14,42 @@ import io.javaoperatorsdk.operator.api.reconciler.Cleaner;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.api.reconciler.ControllerConfiguration;
 import io.javaoperatorsdk.operator.api.reconciler.DeleteControl;
+import io.javaoperatorsdk.operator.api.reconciler.EventSourceContext;
 import io.javaoperatorsdk.operator.api.reconciler.Reconciler;
 import io.javaoperatorsdk.operator.api.reconciler.UpdateControl;
+import io.javaoperatorsdk.operator.processing.event.source.EventSource;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
+
+import static com.dajudge.s3operator.reconciler.ReconciliationException.Reason.PROVIDER_ERROR;
+import static com.dajudge.s3operator.reconciler.ReconcilerSupport.requireAdminSecret;
+import static com.dajudge.s3operator.reconciler.ReconcilerSupport.requireBackend;
+import static com.dajudge.s3operator.reconciler.ReconcilerSupport.secretValue;
+import static com.dajudge.s3operator.reconciler.ReconcilerSupport.transitionTime;
 
 @ApplicationScoped
 @ControllerConfiguration
 public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
     private static final SecureRandom RANDOM = new SecureRandom();
-    private static final Duration RETRY_DELAY = Duration.ofSeconds(5);
 
     @Inject KubernetesClient client;
     @Inject VersityS3Provider provider;
     @ConfigProperty(name = "s3.operator.resync-interval", defaultValue = "1m") Duration resyncInterval;
+    @ConfigProperty(name = "s3.operator.retry-delay", defaultValue = "5s") Duration retryDelay;
 
     @Override
     public UpdateControl<S3User> reconcile(S3User user, Context<S3User> context) {
         try {
+            ResourceValidation.validateUser(user);
             String namespace = user.getMetadata().getNamespace();
-            S3Backend backend = requireBackend(namespace, user.getSpec().getBackendRef());
-            Secret adminSecret = requireAdminSecret(namespace, backend);
+            S3Backend backend = requireBackend(client, provider, namespace, user.getSpec().getBackendRef());
+            Secret adminSecret = requireAdminSecret(client, namespace, backend);
 
             String secretName = secretName(user);
             Secret credentials = client.secrets().inNamespace(namespace).withName(secretName).get();
@@ -59,34 +66,53 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
             }
 
             String accessKey = secretValue(credentials, "accessKey");
-            provider.createUser(backend.getSpec().getEndpoint(),
-                    secretValue(adminSecret, "accessKey"), secretValue(adminSecret, "secretKey"),
-                    accessKey, secretValue(credentials, "secretKey"), user.getSpec().getRole());
+            try {
+                provider.createUser(backend.getSpec().getEndpoint(),
+                        secretValue(adminSecret, "accessKey"), secretValue(adminSecret, "secretKey"),
+                        accessKey, secretValue(credentials, "secretKey"), user.getSpec().getRole());
+            } catch (S3ProviderException e) {
+                throw new ReconciliationException(PROVIDER_ERROR, e.getMessage(), e);
+            }
 
             S3UserStatus status = status(user);
             status.setAccessKeyId(accessKey);
             status.setSecretName(secretName);
             setCondition(user, status, "True", "Reconciled", "Versity user and credentials are ready");
             return UpdateControl.patchStatus(user).rescheduleAfter(resyncInterval);
-        } catch (RuntimeException e) {
+        } catch (ReconciliationException e) {
             S3UserStatus status = status(user);
-            setCondition(user, status, "False", failureReason(e), e.getMessage());
-            return UpdateControl.patchStatus(user).rescheduleAfter(RETRY_DELAY);
+            setCondition(user, status, "False", e.reason().conditionReason(), e.getMessage());
+            return UpdateControl.patchStatus(user).rescheduleAfter(retryDelay);
         }
+    }
+
+    @Override
+    public List<EventSource<?, S3User>> prepareEventSources(EventSourceContext<S3User> context) {
+        var backends = RelatedResourceEventSources.informer(S3Backend.class, S3User.class, context,
+                backend -> RelatedResourceEventSources.matching(context, user -> ResourceValidation.hasUsableUserSpec(user)
+                        && sameNamespace(user, backend)
+                        && backend.getMetadata().getName().equals(user.getSpec().getBackendRef())));
+        var secrets = RelatedResourceEventSources.informer(Secret.class, S3User.class, context,
+                secret -> RelatedResourceEventSources.matching(context,
+                        user -> ResourceValidation.hasUsableUserSpec(user) && secretAffectsUser(secret, user)));
+        return List.of(backends, secrets);
     }
 
     @Override
     public DeleteControl cleanup(S3User user, Context<S3User> context) {
         String namespace = user.getMetadata().getNamespace();
         boolean referenced = client.resources(S3Bucket.class).inNamespace(namespace).list().getItems().stream()
-                .anyMatch(bucket -> user.getMetadata().getName().equals(bucket.getSpec().getUserRef()));
+                .anyMatch(bucket -> bucket.getSpec() != null
+                        && user.getMetadata().getName().equals(bucket.getSpec().getUserRef()));
         if (referenced) {
             throw new IllegalStateException("S3User is still referenced by an S3Bucket: " + user.getMetadata().getName());
         }
 
+        if (!ResourceValidation.hasUsableUserSpec(user)) return DeleteControl.defaultDelete();
         S3Backend backend = client.resources(S3Backend.class).inNamespace(namespace)
                 .withName(user.getSpec().getBackendRef()).get();
-        if (backend == null || !provider.type().equals(backend.getSpec().getProvider())) return DeleteControl.defaultDelete();
+        if (!ResourceValidation.hasUsableBackendSpec(backend)
+                || !provider.type().equals(backend.getSpec().getProvider())) return DeleteControl.defaultDelete();
 
         Secret adminSecret = client.secrets().inNamespace(namespace)
                 .withName(backend.getSpec().getAdminCredentialsSecretRef().getName()).get();
@@ -102,19 +128,17 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
         return DeleteControl.defaultDelete();
     }
 
-    private S3Backend requireBackend(String namespace, String name) {
-        S3Backend backend = client.resources(S3Backend.class).inNamespace(namespace).withName(name).get();
-        if (backend == null) throw new IllegalStateException("S3Backend not found: " + name);
-        if (!provider.type().equals(backend.getSpec().getProvider()))
-            throw new IllegalStateException("Unsupported S3 provider: " + backend.getSpec().getProvider());
-        return backend;
+    private boolean secretAffectsUser(Secret secret, S3User user) {
+        if (!sameNamespace(user, secret)) return false;
+        if (secret.getMetadata().getName().equals(secretName(user))) return true;
+        S3Backend backend = client.resources(S3Backend.class).inNamespace(user.getMetadata().getNamespace())
+                .withName(user.getSpec().getBackendRef()).get();
+        return ResourceValidation.hasUsableBackendSpec(backend)
+                && secret.getMetadata().getName().equals(backend.getSpec().getAdminCredentialsSecretRef().getName());
     }
 
-    private Secret requireAdminSecret(String namespace, S3Backend backend) {
-        Secret secret = client.secrets().inNamespace(namespace)
-                .withName(backend.getSpec().getAdminCredentialsSecretRef().getName()).get();
-        if (secret == null) throw new IllegalStateException("Admin credentials Secret not found");
-        return secret;
+    private static boolean sameNamespace(S3User user, io.fabric8.kubernetes.api.model.HasMetadata secondary) {
+        return user.getMetadata().getNamespace().equals(secondary.getMetadata().getNamespace());
     }
 
     private static S3UserStatus status(S3User user) {
@@ -129,32 +153,9 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
         user.setStatus(status);
     }
 
-    private static String failureReason(RuntimeException e) {
-        String message = e.getMessage() == null ? "" : e.getMessage();
-        if (message.startsWith("S3Backend not found:")) return "BackendNotFound";
-        if (message.startsWith("Unsupported S3 provider:")) return "UnsupportedProvider";
-        if (message.startsWith("Admin credentials Secret not found")) return "AdminCredentialsNotFound";
-        if (message.startsWith("Missing key '")) return "InvalidCredentialsSecret";
-        return "ProviderError";
-    }
-
     private static String secretName(S3User user) {
         return user.getSpec().getSecretName() == null || user.getSpec().getSecretName().isBlank()
                 ? user.getMetadata().getName() + "-s3" : user.getSpec().getSecretName();
-    }
-
-    private static String transitionTime(List<Condition> conditions, String status, String reason) {
-        if (conditions != null) for (Condition c : conditions)
-            if ("Ready".equals(c.getType()) && status.equals(c.getStatus()) && reason.equals(c.getReason())
-                    && c.getLastTransitionTime() != null) return c.getLastTransitionTime();
-        return Instant.now().toString();
-    }
-
-    private static String secretValue(Secret secret, String key) {
-        if (secret.getData() != null && secret.getData().containsKey(key))
-            return new String(Base64.getDecoder().decode(secret.getData().get(key)), StandardCharsets.UTF_8);
-        if (secret.getStringData() != null && secret.getStringData().containsKey(key)) return secret.getStringData().get(key);
-        throw new IllegalStateException("Missing key '" + key + "' in Secret " + secret.getMetadata().getName());
     }
 
     private static String randomSecret() {
