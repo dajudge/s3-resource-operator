@@ -142,13 +142,13 @@ public class VersityS3Provider implements S3Provider {
             if (tolerated != null) {
                 return tolerated;
             }
-            throw new IllegalStateException("VersityGW admin request failed: HTTP " + response.statusCode()
+            throw new S3ProviderException("VersityGW admin request failed: HTTP " + response.statusCode()
                     + " " + response.body());
         } catch (IOException e) {
-            throw new IllegalStateException("VersityGW admin request failed", e);
+            throw new S3ProviderException("VersityGW admin request failed", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("VersityGW admin request interrupted", e);
+            throw new S3ProviderException("VersityGW admin request interrupted", e);
         }
     }
 
