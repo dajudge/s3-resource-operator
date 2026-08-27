@@ -40,97 +40,14 @@ jobs:
           grep -F 'image: "dajudge/s3-resource-operator:dev"' <<<"$rendered"
           grep -F 'name: s3buckets.s3.dajudge.com' <<<"$rendered"
 
-      - name: Build JVM operator image for Helm E2E
-        run: docker build -f src/main/docker/Dockerfile.jvm -t s3-resource-operator:ci .
-
       - name: Create Kind cluster
         uses: helm/kind-action@v1.14.0
         with:
           cluster_name: helm-e2e
           wait: 120s
 
-      - name: Load operator image into Kind
-        run: kind load docker-image s3-resource-operator:ci --name helm-e2e
-
-      - name: Deploy Versity test backend
-        run: |
-          kubectl apply -f src/test/resources/versitygw.yaml
-          kubectl rollout status deployment/versitygw --timeout=120s
-
-      - name: Install Helm chart
-        run: |
-          helm install s3-resource-operator charts/s3-resource-operator \
-            --set image.repository=s3-resource-operator \
-            --set image.tag=ci \
-            --set image.pullPolicy=IfNotPresent \
-            --wait \
-            --timeout=120s
-
-      - name: Verify Helm RBAC
-        run: |
-          set -euo pipefail
-          subject='system:serviceaccount:default:s3-resource-operator'
-          test "$(kubectl auth can-i get s3users.s3.dajudge.com --as="$subject")" = yes
-          test "$(kubectl auth can-i patch s3users/status.s3.dajudge.com --as="$subject")" = yes
-          test "$(kubectl auth can-i get s3buckets.s3.dajudge.com --as="$subject")" = yes
-          test "$(kubectl auth can-i patch s3buckets/status.s3.dajudge.com --as="$subject")" = yes
-          test "$(kubectl auth can-i get s3backends.s3.dajudge.com --as="$subject")" = yes
-          test "$(kubectl auth can-i get secrets --as="$subject")" = yes
-          test "$(kubectl auth can-i create secrets --as="$subject")" = yes
-
-      - name: Exercise installed operator
-        shell: bash
-        run: |
-          set -euo pipefail
-          kubectl create secret generic helm-e2e-admin \
-            --from-literal=accessKey=test-root-access \
-            --from-literal=secretKey=test-root-secret
-
-          cat <<'EOF' | kubectl apply -f -
-          apiVersion: s3.dajudge.com/v1alpha1
-          kind: S3Backend
-          metadata:
-            name: helm-e2e
-          spec:
-            provider: versity
-            endpoint: http://versitygw.default.svc.cluster.local:7070
-            adminCredentialsSecretRef:
-              name: helm-e2e-admin
-          ---
-          apiVersion: s3.dajudge.com/v1alpha1
-          kind: S3User
-          metadata:
-            name: helm-e2e
-          spec:
-            backendRef: helm-e2e
-          ---
-          apiVersion: s3.dajudge.com/v1alpha1
-          kind: S3Bucket
-          metadata:
-            name: helm-e2e
-          spec:
-            backendRef: helm-e2e
-            userRef: helm-e2e
-          EOF
-
-          for resource in s3user/helm-e2e s3bucket/helm-e2e; do
-            ready=''
-            for _ in $(seq 1 45); do
-              ready="$(kubectl get "$resource" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)"
-              if [[ "$ready" == 'True' ]]; then
-                break
-              fi
-              sleep 2
-            done
-            if [[ "$ready" != 'True' ]]; then
-              kubectl get "$resource" -o yaml || true
-              kubectl logs deployment/s3-resource-operator --tail=200 || true
-              exit 1
-            fi
-          done
-
-          secret="$(kubectl get secret helm-e2e-s3 -o jsonpath='{.data.accessKey}' | base64 --decode)"
-          test "$secret" = 'default.helm-e2e'
+      - name: Install and exercise Helm chart
+        run: bash hack/helm-e2e.sh
 
       - name: Upload test reports
         if: failure()
