@@ -289,6 +289,7 @@ jobs:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
       VERSION: ${{ needs.validate.outputs.version }}
       PRERELEASE: ${{ needs.validate.outputs.prerelease }}
     steps:
