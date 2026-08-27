@@ -87,19 +87,15 @@ class FailureStatusE2ETest {
         createBucket("missing-user-bucket-taxonomy", "bucket-good-backend", "does-not-exist");
         awaitBucketCondition("missing-user-bucket-taxonomy", "False", "UserNotFound");
 
-        client.secrets().inNamespace(NS).withName("bucket-owner-s3").delete();
-        createBucket("missing-user-credentials-bucket", "bucket-good-backend", "bucket-owner");
+        // Use a real S3User whose own reconciliation is blocked so its Secret cannot race with this test.
+        createUser("blocked-owner", "does-not-exist");
+        awaitUserCondition("blocked-owner", "False", "BackendNotFound");
+        createBucket("missing-user-credentials-bucket", "bucket-good-backend", "blocked-owner");
         awaitBucketCondition("missing-user-credentials-bucket", "False", "UserCredentialsNotFound");
 
-        client.secrets().resource(new SecretBuilder().withNewMetadata().withName("bucket-owner-s3").withNamespace(NS).endMetadata()
-                .addToStringData("accessKey", "default.bucket-owner").build()).create();
+        client.secrets().resource(new SecretBuilder().withNewMetadata().withName("blocked-owner-s3").withNamespace(NS).endMetadata()
+                .addToStringData("accessKey", "default.blocked-owner").build()).create();
         awaitBucketCondition("missing-user-credentials-bucket", "False", "InvalidCredentialsSecret");
-
-        client.secrets().inNamespace(NS).withName("bucket-owner-s3").delete();
-        client.secrets().resource(new SecretBuilder().withNewMetadata().withName("bucket-owner-s3").withNamespace(NS).endMetadata()
-                .addToStringData("accessKey", "default.bucket-owner")
-                .addToStringData("secretKey", "not-used-for-admin-create")
-                .addToStringData("endpoint", endpoint).build()).create();
 
         createBackend("missing-admin-bucket-backend", "versity", endpoint, "missing-bucket-admin");
         createBucket("missing-admin-bucket", "missing-admin-bucket-backend", "bucket-owner");
