@@ -93,9 +93,11 @@ class FailureStatusE2ETest {
         createBucket("missing-user-credentials-bucket", "bucket-good-backend", "blocked-owner");
         awaitBucketCondition("missing-user-credentials-bucket", "False", "UserCredentialsNotFound");
 
-        client.secrets().resource(new SecretBuilder().withNewMetadata().withName("blocked-owner-s3").withNamespace(NS).endMetadata()
-                .addToStringData("accessKey", "default.blocked-owner").build()).create();
-        awaitBucketCondition("missing-user-credentials-bucket", "False", "InvalidCredentialsSecret");
+        createBackend("invalid-admin-bucket-backend", "versity", endpoint, "invalid-bucket-admin");
+        client.secrets().resource(new SecretBuilder().withNewMetadata().withName("invalid-bucket-admin").withNamespace(NS).endMetadata()
+                .addToStringData("accessKey", "test-root-access").build()).create();
+        createBucket("invalid-admin-bucket", "invalid-admin-bucket-backend", "bucket-owner");
+        awaitBucketCondition("invalid-admin-bucket", "False", "InvalidCredentialsSecret");
 
         createBackend("missing-admin-bucket-backend", "versity", endpoint, "missing-bucket-admin");
         createBucket("missing-admin-bucket", "missing-admin-bucket-backend", "bucket-owner");
