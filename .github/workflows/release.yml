@@ -35,7 +35,7 @@ jobs:
 
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -51,13 +51,24 @@ jobs:
         run: mvn --batch-mode --no-transfer-progress verify
 
       - name: Set up Helm
-        uses: azure/setup-helm@v4
+        uses: azure/setup-helm@v5
 
       - name: Verify Helm chart
         run: |
           set -euo pipefail
           helm lint charts/s3-resource-operator
-          helm template s3-resource-operator charts/s3-resource-operator --include-crds >/dev/null
+          rendered="$(helm template s3-resource-operator charts/s3-resource-operator --include-crds)"
+          grep -F 'image: "dajudge/s3-resource-operator:dev"' <<<"$rendered"
+          grep -F 'name: s3buckets.s3.dajudge.com' <<<"$rendered"
+
+      - name: Create Kind cluster
+        uses: helm/kind-action@v1.14.0
+        with:
+          cluster_name: helm-e2e
+          wait: 120s
+
+      - name: Install and exercise Helm chart
+        run: bash hack/helm-e2e.sh
 
       - name: Upload test reports
         if: failure()
@@ -196,7 +207,7 @@ jobs:
           "${IMAGE}:${VERSION}-arm64"
 
       - name: Set up Helm
-        uses: azure/setup-helm@v4
+        uses: azure/setup-helm@v5
 
       - name: Package Helm chart
         shell: bash
@@ -222,3 +233,44 @@ jobs:
 
       - name: Push Helm chart OCI artifact
         run: helm push "dist/chart/s3-resource-operator-chart-${VERSION}.tgz" "$CHART_OCI_REPOSITORY"
+
+      - name: Upload packaged Helm chart
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-chart
+          path: dist/chart/s3-resource-operator-chart-${{ env.VERSION }}.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  github-release:
+    needs:
+      - validate
+      - publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.validate.outputs.version }}
+      PRERELEASE: ${{ needs.validate.outputs.prerelease }}
+    steps:
+      - name: Download packaged Helm chart
+        uses: actions/download-artifact@v5
+        with:
+          name: release-chart
+          path: dist/chart
+
+      - name: Create GitHub release
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=(
+            "release/${VERSION}"
+            --verify-tag
+            --title "${VERSION}"
+            --generate-notes
+          )
+          if [[ "$PRERELEASE" == 'true' ]]; then
+            args+=(--prerelease)
+          fi
+          gh release create "${args[@]}" "dist/chart/s3-resource-operator-chart-${VERSION}.tgz"
