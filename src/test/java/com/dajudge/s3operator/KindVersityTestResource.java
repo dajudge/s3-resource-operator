@@ -14,6 +14,9 @@ import java.util.Map;
 import static io.fabric8.kubernetes.client.Config.fromKubeconfig;
 
 public class KindVersityTestResource implements QuarkusTestResourceLifecycleManager {
+    private static final String KUBECONFIG_PROPERTY = "quarkus.kubernetes-client.kubeconfig-file";
+    private static final String ENDPOINT_PROPERTY = "test.s3.endpoint";
+
     private KindContainer<?> kube;
     private KubernetesClient client;
     private LocalPortForward portForward;
@@ -48,9 +51,14 @@ public class KindVersityTestResource implements QuarkusTestResourceLifecycleMana
                     .withName("versitygw")
                     .portForward(7070);
 
+            String kubeconfigPath = kubeconfig.toAbsolutePath().toString();
+            String endpoint = "http://127.0.0.1:" + portForward.getLocalPort();
+            System.setProperty(KUBECONFIG_PROPERTY, kubeconfigPath);
+            System.setProperty(ENDPOINT_PROPERTY, endpoint);
+
             return Map.of(
-                    "quarkus.kubernetes-client.kubeconfig-file", kubeconfig.toAbsolutePath().toString(),
-                    "test.s3.endpoint", "http://127.0.0.1:" + portForward.getLocalPort()
+                    KUBECONFIG_PROPERTY, kubeconfigPath,
+                    ENDPOINT_PROPERTY, endpoint
             );
         } catch (Exception e) {
             stop();
@@ -67,6 +75,8 @@ public class KindVersityTestResource implements QuarkusTestResourceLifecycleMana
 
     @Override
     public void stop() {
+        System.clearProperty(KUBECONFIG_PROPERTY);
+        System.clearProperty(ENDPOINT_PROPERTY);
         if (portForward != null) {
             try {
                 portForward.close();
