@@ -21,7 +21,7 @@ final class RelatedResourceEventSources {
             EventSourceContext<P> context,
             Function<S, Set<ResourceID>> mapper) {
         var configuration = InformerEventSourceConfiguration.from(secondaryType, primaryType)
-                .withNamespacesInheritedFromController(context)
+                .withNamespacesInheritedFromController()
                 .withSecondaryToPrimaryMapper(mapper::apply)
                 .build();
         return new InformerEventSource<>(configuration, context);
