@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-version="${PUBLISHED_VERSION:?PUBLISHED_VERSION must be set, e.g. 0.1.0-rc.7}"
+version="${PUBLISHED_VERSION:?PUBLISHED_VERSION must be set, e.g. 0.1.0-rc.8}"
 cluster_name="${KIND_CLUSTER_NAME:-published-release-e2e}"
 namespace="${E2E_NAMESPACE:-published-release-e2e}"
 release="${E2E_RELEASE:-s3-resource-operator}"
@@ -20,6 +20,15 @@ wait_ready() {
   done
   kubectl get -n "$namespace" "$resource" -o yaml || true
   return 1
+}
+
+newest_operator_pod_uid() {
+  kubectl get pod -n "$namespace" \
+    -l "app.kubernetes.io/instance=${release}" \
+    -o jsonpath='{range .items[*]}{.metadata.creationTimestamp}{" "}{.metadata.uid}{"\n"}{end}' \
+    | sort \
+    | tail -n 1 \
+    | awk '{print $2}'
 }
 
 dump_diagnostics() {
@@ -84,7 +93,7 @@ user_uid_before="$(kubectl get s3user published-e2e -n "$namespace" -o jsonpath=
 bucket_uid_before="$(kubectl get s3bucket published-e2e -n "$namespace" -o jsonpath='{.metadata.uid}')"
 access_before="$(kubectl get secret published-e2e-s3 -n "$namespace" -o jsonpath='{.data.accessKey}')"
 secret_before="$(kubectl get secret published-e2e-s3 -n "$namespace" -o jsonpath='{.data.secretKey}')"
-pod_uid_before="$(kubectl get pod -n "$namespace" -l "app.kubernetes.io/instance=${release}" -o jsonpath='{.items[0].metadata.uid}')"
+pod_uid_before="$(newest_operator_pod_uid)"
 
 test -n "$access_before"
 test -n "$secret_before"
@@ -115,10 +124,10 @@ helm upgrade "$release" charts/s3-resource-operator \
   --timeout=180s
 
 # Force a fresh operator process even if the rendered pod template is otherwise
-# identical, then prove the pod was actually replaced before post-upgrade assertions.
+# identical, then prove the newest pod was actually replaced before post-upgrade assertions.
 kubectl rollout restart -n "$namespace" deployment/"$deployment"
 kubectl rollout status -n "$namespace" deployment/"$deployment" --timeout=120s
-pod_uid_after="$(kubectl get pod -n "$namespace" -l "app.kubernetes.io/instance=${release}" -o jsonpath='{.items[0].metadata.uid}')"
+pod_uid_after="$(newest_operator_pod_uid)"
 test -n "$pod_uid_after"
 test "$pod_uid_after" != "$pod_uid_before"
 
