@@ -343,6 +343,6 @@ jobs:
             args+=(--prerelease)
           fi
           gh release create "${args[@]}" \
-            "dist/release/s3-resource-operator-chart-${VERSION}.tgz" \
-            "dist/release/THIRD-PARTY-NOTICES.txt" \
-            "dist/release/s3-resource-operator-licenses-${VERSION}.tar.gz"
+            "dist/release/chart/s3-resource-operator-chart-${VERSION}.tgz" \
+            "dist/release/licenses/THIRD-PARTY-NOTICES.txt" \
+            "dist/release/licenses/s3-resource-operator-licenses-${VERSION}.tar.gz"
