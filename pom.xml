@@ -14,6 +14,7 @@
     <testcontainers.version>2.0.2</testcontainers.version>
     <aws.sdk.version>2.43.2</aws.sdk.version>
     <awaitility.version>4.3.0</awaitility.version>
+    <spotbugs-maven-plugin.version>4.10.3.0</spotbugs-maven-plugin.version>
     <skipITs>true</skipITs>
     <skipUnitTests>false</skipUnitTests>
   </properties>
@@ -143,6 +144,25 @@
           <systemPropertyVariables>
             <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
           </systemPropertyVariables>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>com.github.spotbugs</groupId>
+        <artifactId>spotbugs-maven-plugin</artifactId>
+        <version>${spotbugs-maven-plugin.version}</version>
+        <executions>
+          <execution>
+            <id>spotbugs-check</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <effort>Max</effort>
+          <threshold>Medium</threshold>
+          <failOnError>true</failOnError>
         </configuration>
       </plugin>
     </plugins>
