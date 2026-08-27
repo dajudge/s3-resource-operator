@@ -2,16 +2,14 @@
 
 Kubernetes operator for declarative S3 users and buckets.
 
-## Installation
+## Install
 
-Releases are published from `release/<semver>` Git tags. The Helm chart and container image always use the same version, and the chart defaults to the matching image tag.
+Each `release/<semver>` tag publishes matching container and Helm chart versions. The chart defaults to the container image with the same version.
 
 ```bash
 helm install s3-resource-operator \
   oci://registry-1.docker.io/dajudge/s3-resource-operator-chart \
-  --version 1.2.3 \
-  --namespace s3-resource-operator \
-  --create-namespace
+  --version <semver>
 ```
 
-For release `1.2.3`, the chart installs `dajudge/s3-resource-operator:1.2.3` by default. `image.tag` can still be overridden explicitly when required.
+A successful tagged release also creates a GitHub Release for `release/<semver>` with generated release notes and the packaged Helm chart attached.
