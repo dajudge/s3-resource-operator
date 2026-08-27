@@ -1,0 +1,8 @@
+FROM quay.io/quarkus/quarkus-micro-image:2.0
+
+WORKDIR /work/
+ARG BINARY
+COPY --chmod=0755 ${BINARY} /work/application
+
+USER 1001
+ENTRYPOINT ["/work/application"]
