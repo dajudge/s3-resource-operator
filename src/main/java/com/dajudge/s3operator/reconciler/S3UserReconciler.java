@@ -158,7 +158,11 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
 
     private static String randomSecret() {
         byte[] bytes = new byte[32];
-        new SecureRandom().nextBytes(bytes);
+        SecureRandomHolder.INSTANCE.nextBytes(bytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    private static final class SecureRandomHolder {
+        private static final SecureRandom INSTANCE = new SecureRandom();
     }
 }
