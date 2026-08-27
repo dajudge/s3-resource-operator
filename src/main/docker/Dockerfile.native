@@ -4,5 +4,10 @@ WORKDIR /work/
 ARG BINARY
 COPY --chmod=0755 ${BINARY} /work/application
 
+COPY LICENSE /licenses/LICENSE
+COPY target/generated-sources/license/THIRD-PARTY-NOTICES.txt /licenses/THIRD-PARTY-NOTICES.txt
+COPY target/generated-resources/licenses.xml /licenses/third-party/licenses.xml
+COPY target/generated-resources/licenses/ /licenses/third-party/texts/
+
 USER 1001
 ENTRYPOINT ["/work/application"]

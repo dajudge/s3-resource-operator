@@ -29,6 +29,9 @@ jobs:
       - name: Verify
         run: mvn --batch-mode --no-transfer-progress verify
 
+      - name: Verify runtime dependency licenses
+        run: bash hack/check-third-party-licenses.sh
+
       - name: Set up Helm
         uses: azure/setup-helm@v5
 
