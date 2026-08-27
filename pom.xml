@@ -14,6 +14,8 @@
     <testcontainers.version>2.0.2</testcontainers.version>
     <aws.sdk.version>2.43.2</aws.sdk.version>
     <awaitility.version>4.3.0</awaitility.version>
+    <skipITs>true</skipITs>
+    <skipUnitTests>false</skipUnitTests>
   </properties>
 
   <dependencyManagement>
@@ -118,6 +120,26 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <version>3.5.3</version>
         <configuration>
+          <skipTests>${skipUnitTests}</skipTests>
+          <systemPropertyVariables>
+            <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <version>3.5.3</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <skipITs>${skipITs}</skipITs>
           <systemPropertyVariables>
             <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
           </systemPropertyVariables>
@@ -125,4 +147,18 @@
       </plugin>
     </plugins>
   </build>
+
+  <profiles>
+    <profile>
+      <id>native-integration-tests</id>
+      <activation>
+        <property>
+          <name>native</name>
+        </property>
+      </activation>
+      <properties>
+        <skipITs>false</skipITs>
+      </properties>
+    </profile>
+  </profiles>
 </project>
