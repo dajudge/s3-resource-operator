@@ -65,8 +65,10 @@ class DriftResyncE2ETest {
             new VersityS3Provider().deleteBucket(endpoint, ROOT_ACCESS, ROOT_SECRET, "drift-bucket");
             assertThatThrownBy(() -> s3.headBucket(HeadBucketRequest.builder().bucket("drift-bucket").build()))
                     .isInstanceOf(S3Exception.class);
-            await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
-                    assertThat(s3.headBucket(HeadBucketRequest.builder().bucket("drift-bucket").build())).isNotNull());
+            await().ignoreExceptions().atMost(Duration.ofSeconds(10)).until(() -> {
+                s3.headBucket(HeadBucketRequest.builder().bucket("drift-bucket").build());
+                return true;
+            });
         }
     }
 
