@@ -21,11 +21,16 @@ helm install "$release" charts/s3-resource-operator \
   --wait \
   --timeout=120s
 
-subject="system:serviceaccount:default:${release}"
+deployment="$(kubectl get deployment -l "app.kubernetes.io/instance=${release}" -o jsonpath='{.items[0].metadata.name}')"
+service_account="$(kubectl get deployment "$deployment" -o jsonpath='{.spec.template.spec.serviceAccountName}')"
+subject="system:serviceaccount:default:${service_account}"
+
+test -n "$deployment"
+test -n "$service_account"
 test "$(kubectl auth can-i get s3users.s3.dajudge.com --as="$subject")" = yes
-test "$(kubectl auth can-i patch s3users/status.s3.dajudge.com --as="$subject")" = yes
+test "$(kubectl auth can-i patch s3users.s3.dajudge.com/status --as="$subject")" = yes
 test "$(kubectl auth can-i get s3buckets.s3.dajudge.com --as="$subject")" = yes
-test "$(kubectl auth can-i patch s3buckets/status.s3.dajudge.com --as="$subject")" = yes
+test "$(kubectl auth can-i patch s3buckets.s3.dajudge.com/status --as="$subject")" = yes
 test "$(kubectl auth can-i get s3backends.s3.dajudge.com --as="$subject")" = yes
 test "$(kubectl auth can-i get secrets --as="$subject")" = yes
 test "$(kubectl auth can-i create secrets --as="$subject")" = yes
@@ -72,7 +77,7 @@ for resource in s3user/helm-e2e s3bucket/helm-e2e; do
   done
   if [[ "$ready" != 'True' ]]; then
     kubectl get "$resource" -o yaml || true
-    kubectl logs "deployment/${release}" --tail=200 || true
+    kubectl logs "deployment/${deployment}" --tail=200 || true
     exit 1
   fi
 done
