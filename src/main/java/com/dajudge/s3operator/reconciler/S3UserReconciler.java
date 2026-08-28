@@ -1,10 +1,10 @@
 package com.dajudge.s3operator.reconciler;
 
-import static com.dajudge.s3operator.reconciler.ReconciliationException.Reason.PROVIDER_ERROR;
 import static com.dajudge.s3operator.reconciler.ReconcilerSupport.requireAdminSecret;
 import static com.dajudge.s3operator.reconciler.ReconcilerSupport.requireBackend;
 import static com.dajudge.s3operator.reconciler.ReconcilerSupport.secretValue;
 import static com.dajudge.s3operator.reconciler.ReconcilerSupport.transitionTime;
+import static com.dajudge.s3operator.reconciler.ReconciliationException.Reason.PROVIDER_ERROR;
 
 import com.dajudge.s3operator.api.S3Backend;
 import com.dajudge.s3operator.api.S3Bucket;
@@ -35,24 +35,30 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 @ApplicationScoped
 @ControllerConfiguration
 public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
-    @Inject KubernetesClient client;
-    @Inject VersityS3Provider provider;
-    @ConfigProperty(name = "s3.operator.resync-interval", defaultValue = "1m") Duration resyncInterval;
-    @ConfigProperty(name = "s3.operator.retry-delay", defaultValue = "5s") Duration retryDelay;
+    @Inject
+    KubernetesClient client;
+
+    @Inject
+    VersityS3Provider provider;
+
+    @ConfigProperty(name = "s3.operator.resync-interval", defaultValue = "1m")
+    Duration resyncInterval;
+
+    @ConfigProperty(name = "s3.operator.retry-delay", defaultValue = "5s")
+    Duration retryDelay;
 
     @Override
     public UpdateControl<S3User> reconcile(S3User user, Context<S3User> context) {
         try {
             ResourceValidation.validateUser(user);
             String namespace = user.getMetadata().getNamespace();
-            S3Backend backend = requireBackend(client, provider, namespace, user.getSpec().getBackendRef());
+            S3Backend backend =
+                    requireBackend(client, provider, namespace, user.getSpec().getBackendRef());
             Secret adminSecret = requireAdminSecret(client, namespace, backend);
 
             String secretName = secretName(user);
-            Secret credentials = client.secrets()
-                    .inNamespace(namespace)
-                    .withName(secretName)
-                    .get();
+            Secret credentials =
+                    client.secrets().inNamespace(namespace).withName(secretName).get();
             if (credentials == null) {
                 String accessKey = namespace + "." + user.getMetadata().getName();
                 String secretKey = randomSecret();
