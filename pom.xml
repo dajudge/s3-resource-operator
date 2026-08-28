@@ -189,9 +189,11 @@
         <configuration>
           <targetClasses>
             <param>com.dajudge.s3operator.reconciler.ResourceValidation*</param>
+            <param>com.dajudge.s3operator.reconciler.ReconcilerSupport*</param>
           </targetClasses>
           <targetTests>
             <param>com.dajudge.s3operator.reconciler.ResourceValidationTest*</param>
+            <param>com.dajudge.s3operator.reconciler.ReconcilerSupportTest*</param>
           </targetTests>
           <outputFormats>
             <param>HTML</param>
