@@ -5,6 +5,7 @@ Guidance for coding agents working in this repository.
 ## Pull requests
 
 - Keep PRs focused, independent, and as small as practical.
+- Prefer the smallest cohesive PR that makes material progress over the smallest possible PR. Do not fragment one responsibility into a stream of micro-PRs when a slightly broader change is easier to review and meaningfully reduces maintenance cost.
 - Prefer multiple independent PRs over one large mixed change.
 - Use squash merges.
 - If a PR is green, review-clean, mergeable, and independent, merge it promptly.
@@ -42,6 +43,14 @@ Guidance for coding agents working in this repository.
 - Do not weaken PIT quality gates.
 - Keep the mutation threshold at 95% and coverage threshold at 90% unless explicitly instructed otherwise.
 - When expanding PIT target classes, add focused tests that exercise the newly included production code rather than lowering thresholds.
+
+## Improvement ROI
+
+- Improvement-only work must have a concrete maintenance payoff beyond aesthetic cleanliness. Good reasons include removing meaningful duplication, reducing mixed responsibilities or cognitive load, exposing or closing a real testing gap, eliminating a recurring CI/review failure mode, or making a known future change materially cheaper.
+- Stop general cleanup when the remaining proposals are mostly movement, renaming, abstraction for its own sake, marginal metric gains, or tests whose maintenance cost exceeds the behavior they protect.
+- Do not tighten quality thresholds merely because the current code happens to fit under stricter numbers. Increase a gate only when it addresses an observed maintenance or defect risk.
+- As the codebase becomes cleaner, switch from continuous beautification to opportunistic refactoring: improve an area when a feature, bug, or clearly identified maintenance pain takes work there.
+- Before starting another improvement PR, identify the concrete maintenance pain it removes. If that cannot be stated clearly, prefer stopping the cleanup campaign.
 
 ## Change discipline
 
