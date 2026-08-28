@@ -209,7 +209,8 @@ class S3UserReconcilerTest {
     }
 
     @SuppressWarnings("unchecked")
-    private static <T extends HasMetadata> void stubResourceList(KubernetesClient client, Class<T> type, List<T> items) {
+    private static <T extends HasMetadata> void stubResourceList(
+            KubernetesClient client, Class<T> type, List<T> items) {
         MixedOperation<T, KubernetesResourceList<T>, Resource<T>> operation = mock(MixedOperation.class);
         NonNamespaceOperation<T, KubernetesResourceList<T>, Resource<T>> namespaced = mock(NonNamespaceOperation.class);
         KubernetesResourceList<T> list = mock(KubernetesResourceList.class);
