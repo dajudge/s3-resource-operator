@@ -26,6 +26,14 @@ Guidance for coding agents working in this repository.
 - A PR is considered green only when its relevant focused jobs and aggregate required checks have passed.
 - Avoid creating no-op or artificial commits solely to work around CI unless a fresh user-authored commit is genuinely required to trigger checks.
 
+## Clean Code
+
+- Clean Code is mandatory for production and test code; prefer simple, readable code over clever abstractions.
+- Keep files and methods focused. Checkstyle enforces a maximum Java file length of 600 lines and method length of 80 non-empty lines.
+- Keep control flow simple. Checkstyle enforces cyclomatic complexity of at most 10 per method.
+- Do not suppress or weaken Clean Code checks to make a change pass. Refactor the code instead unless an explicit exception is approved.
+- Treat these limits as ceilings, not targets; prefer substantially smaller files, methods, and complexity where practical.
+
 ## Mutation testing
 
 - Do not weaken PIT quality gates.
