@@ -46,6 +46,21 @@ final class ReconcilerSupport {
         return secret;
     }
 
+    static CleanupDependencies cleanupDependencies(
+            KubernetesClient client, VersityS3Provider provider, String namespace, String backendName) {
+        S3Backend backend = client.resources(S3Backend.class)
+                .inNamespace(namespace)
+                .withName(backendName)
+                .get();
+        if (!ResourceValidation.hasUsableBackendSpec(backend)
+                || !provider.type().equals(backend.getSpec().getProvider())) return null;
+        Secret adminSecret = client.secrets()
+                .inNamespace(namespace)
+                .withName(backend.getSpec().getAdminCredentialsSecretRef().getName())
+                .get();
+        return adminSecret == null ? null : new CleanupDependencies(backend, adminSecret);
+    }
+
     static Condition readyCondition(
             long generation, List<Condition> conditions, String status, String reason, String message) {
         return new ConditionBuilder()
@@ -87,4 +102,6 @@ final class ReconcilerSupport {
                 INVALID_CREDENTIALS_SECRET,
                 "Missing key '" + key + "' in Secret " + secret.getMetadata().getName());
     }
+
+    record CleanupDependencies(S3Backend backend, Secret adminSecret) {}
 }

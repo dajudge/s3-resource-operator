@@ -1,5 +1,6 @@
 package com.dajudge.s3operator.reconciler;
 
+import static com.dajudge.s3operator.reconciler.ReconcilerSupport.cleanupDependencies;
 import static com.dajudge.s3operator.reconciler.ReconcilerSupport.defaultedName;
 import static com.dajudge.s3operator.reconciler.ReconcilerSupport.readyCondition;
 import static com.dajudge.s3operator.reconciler.ReconcilerSupport.requireAdminSecret;
@@ -122,18 +123,9 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
         }
 
         if (!ResourceValidation.hasUsableUserSpec(user)) return DeleteControl.defaultDelete();
-        S3Backend backend = client.resources(S3Backend.class)
-                .inNamespace(namespace)
-                .withName(user.getSpec().getBackendRef())
-                .get();
-        if (!ResourceValidation.hasUsableBackendSpec(backend)
-                || !provider.type().equals(backend.getSpec().getProvider())) return DeleteControl.defaultDelete();
-
-        Secret adminSecret = client.secrets()
-                .inNamespace(namespace)
-                .withName(backend.getSpec().getAdminCredentialsSecretRef().getName())
-                .get();
-        if (adminSecret == null) return DeleteControl.defaultDelete();
+        var dependencies =
+                cleanupDependencies(client, provider, namespace, user.getSpec().getBackendRef());
+        if (dependencies == null) return DeleteControl.defaultDelete();
 
         Secret credentials = client.secrets()
                 .inNamespace(namespace)
@@ -144,9 +136,9 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
                 : user.getStatus() == null ? null : user.getStatus().getAccessKeyId();
         if (accessKey != null && !accessKey.isBlank()) {
             provider.deleteUser(
-                    backend.getSpec().getEndpoint(),
-                    secretValue(adminSecret, "accessKey"),
-                    secretValue(adminSecret, "secretKey"),
+                    dependencies.backend().getSpec().getEndpoint(),
+                    secretValue(dependencies.adminSecret(), "accessKey"),
+                    secretValue(dependencies.adminSecret(), "secretKey"),
                     accessKey);
         }
         return DeleteControl.defaultDelete();
