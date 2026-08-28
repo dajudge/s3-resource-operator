@@ -72,6 +72,11 @@
       <scope>test</scope>
     </dependency>
     <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-jacoco</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
       <groupId>org.assertj</groupId>
       <artifactId>assertj-core</artifactId>
       <version>3.27.6</version>
@@ -135,17 +140,15 @@
         <version>${jacoco-maven-plugin.version}</version>
         <executions>
           <execution>
-            <id>prepare-jacoco-agent</id>
+            <id>prepare-jacoco-agent-for-plain-tests</id>
             <goals>
               <goal>prepare-agent</goal>
             </goals>
-          </execution>
-          <execution>
-            <id>jacoco-report</id>
-            <phase>verify</phase>
-            <goals>
-              <goal>report</goal>
-            </goals>
+            <configuration>
+              <exclClassLoaders>*QuarkusClassLoader</exclClassLoaders>
+              <destFile>${project.build.directory}/jacoco-quarkus.exec</destFile>
+              <append>true</append>
+            </configuration>
           </execution>
         </executions>
       </plugin>
@@ -185,6 +188,7 @@
           <skipTests>${skipUnitTests}</skipTests>
           <systemPropertyVariables>
             <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
+            <quarkus.jacoco.reuse-data-file>true</quarkus.jacoco.reuse-data-file>
           </systemPropertyVariables>
         </configuration>
       </plugin>
