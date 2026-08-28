@@ -1,10 +1,10 @@
 # Quality Dashboard
 
-> Automatically generated from [`df18c2f`](https://github.com/dajudge/s3-resource-operator/commit/df18c2fd7aafe8b946bfe8998e06ab984b75e544) after a successful [`main` CI run](https://github.com/dajudge/s3-resource-operator/actions/runs/33207346392) on 2026-08-28 20:20 UTC. Do not edit this branch manually.
+> Automatically generated from [`0ec7991`](https://github.com/dajudge/s3-resource-operator/commit/0ec79918f3affa426a5c0046253004b64ca0173a) after a successful [`main` CI run](https://github.com/dajudge/s3-resource-operator/actions/runs/33219190414) on 2026-08-28 23:12 UTC. Do not edit this branch manually.
 
-[![Line coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/dajudge/s3-resource-operator/badges/metrics/line-coverage.json)](https://github.com/dajudge/s3-resource-operator/actions/runs/33207346392)
-[![Branch coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/dajudge/s3-resource-operator/badges/metrics/branch-coverage.json)](https://github.com/dajudge/s3-resource-operator/actions/runs/33207346392)
-[![Reconciler mutation score](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/dajudge/s3-resource-operator/badges/metrics/mutation-score.json)](https://github.com/dajudge/s3-resource-operator/actions/runs/33207346392)
+[![Line coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/dajudge/s3-resource-operator/badges/metrics/line-coverage.json)](https://github.com/dajudge/s3-resource-operator/actions/runs/33219190414)
+[![Branch coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/dajudge/s3-resource-operator/badges/metrics/branch-coverage.json)](https://github.com/dajudge/s3-resource-operator/actions/runs/33219190414)
+[![Reconciler mutation score](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/dajudge/s3-resource-operator/badges/metrics/mutation-score.json)](https://github.com/dajudge/s3-resource-operator/actions/runs/33219190414)
 
 ## JUnit
 
@@ -14,7 +14,7 @@
 | Failures | **0** |
 | Errors | **0** |
 | Skipped | 0 |
-| Test runtime | 67.07 s |
+| Test runtime | 72.68 s |
 | Report files | 13 |
 
 ## JaCoCo
@@ -55,4 +55,4 @@ The dashboard is published only after all aggregate CI requirements pass:
 | Focused event-source PIT | ✅ |
 | Native build + ABI smoke test | ✅ |
 
-Full JaCoCo, PIT, and test-report artifacts are attached to the [source CI run](https://github.com/dajudge/s3-resource-operator/actions/runs/33207346392).
+Full JaCoCo, PIT, and test-report artifacts are attached to the [source CI run](https://github.com/dajudge/s3-resource-operator/actions/runs/33219190414).
