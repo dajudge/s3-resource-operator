@@ -80,6 +80,42 @@ class ReconcilerSupportTest {
     }
 
     @Test
+    void buildsReadyConditionAndPreservesTransitionTime() {
+        String existing = "2026-08-28T10:00:00Z";
+        var previous = new ConditionBuilder()
+                .withType("Ready")
+                .withStatus("True")
+                .withReason("Reconciled")
+                .withLastTransitionTime(existing)
+                .build();
+
+        var condition = ReconcilerSupport.readyCondition(7L, List.of(previous), "True", "Reconciled", null);
+
+        assertThat(condition.getType()).isEqualTo("Ready");
+        assertThat(condition.getStatus()).isEqualTo("True");
+        assertThat(condition.getReason()).isEqualTo("Reconciled");
+        assertThat(condition.getMessage()).isEqualTo("Reconciled");
+        assertThat(condition.getObservedGeneration()).isEqualTo(7L);
+        assertThat(condition.getLastTransitionTime()).isEqualTo(existing);
+    }
+
+    @Test
+    void usesExplicitReadyConditionMessage() {
+        var condition = ReconcilerSupport.readyCondition(7L, null, "False", "ProviderError", "provider failed");
+
+        assertThat(condition.getMessage()).isEqualTo("provider failed");
+        assertThat(condition.getLastTransitionTime()).isNotBlank();
+    }
+
+    @Test
+    void defaultsConfiguredNamesOnlyWhenAbsentOrBlank() {
+        assertThat(ReconcilerSupport.defaultedName(null, "fallback")).isEqualTo("fallback");
+        assertThat(ReconcilerSupport.defaultedName("", "fallback")).isEqualTo("fallback");
+        assertThat(ReconcilerSupport.defaultedName("  ", "fallback")).isEqualTo("fallback");
+        assertThat(ReconcilerSupport.defaultedName("configured", "fallback")).isEqualTo("configured");
+    }
+
+    @Test
     void reusesTransitionTimeOnlyForSameReadyState() {
         String existing = "2026-08-28T10:00:00Z";
         var ready = new ConditionBuilder()
