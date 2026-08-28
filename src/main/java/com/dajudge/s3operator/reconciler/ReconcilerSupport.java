@@ -19,13 +19,18 @@ import java.util.List;
 final class ReconcilerSupport {
     private ReconcilerSupport() {}
 
-    static S3Backend requireBackend(KubernetesClient client, VersityS3Provider provider, String namespace, String name) {
-        S3Backend backend = client.resources(S3Backend.class).inNamespace(namespace).withName(name).get();
+    static S3Backend requireBackend(
+            KubernetesClient client, VersityS3Provider provider, String namespace, String name) {
+        S3Backend backend = client.resources(S3Backend.class)
+                .inNamespace(namespace)
+                .withName(name)
+                .get();
         if (backend == null) throw new ReconciliationException(BACKEND_NOT_FOUND, "S3Backend not found: " + name);
         ResourceValidation.validateBackend(backend);
         if (!provider.type().equals(backend.getSpec().getProvider())) {
             throw new ReconciliationException(
-                    UNSUPPORTED_PROVIDER, "Unsupported S3 provider: " + backend.getSpec().getProvider());
+                    UNSUPPORTED_PROVIDER,
+                    "Unsupported S3 provider: " + backend.getSpec().getProvider());
         }
         return backend;
     }

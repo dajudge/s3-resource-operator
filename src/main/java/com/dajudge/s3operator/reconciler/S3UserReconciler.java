@@ -57,7 +57,8 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
             Secret adminSecret = requireAdminSecret(client, namespace, backend);
 
             String secretName = secretName(user);
-            Secret credentials = client.secrets().inNamespace(namespace).withName(secretName).get();
+            Secret credentials =
+                    client.secrets().inNamespace(namespace).withName(secretName).get();
             if (credentials == null) {
                 String accessKey = namespace + "." + user.getMetadata().getName();
                 String secretKey = randomSecret();
@@ -119,8 +120,8 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
                 .anyMatch(bucket -> bucket.getSpec() != null
                         && user.getMetadata().getName().equals(bucket.getSpec().getUserRef()));
         if (referenced) {
-            throw new IllegalStateException(
-                    "S3User is still referenced by an S3Bucket: " + user.getMetadata().getName());
+            throw new IllegalStateException("S3User is still referenced by an S3Bucket: "
+                    + user.getMetadata().getName());
         }
 
         if (!ResourceValidation.hasUsableUserSpec(user)) return DeleteControl.defaultDelete();
@@ -137,7 +138,10 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
                 .get();
         if (adminSecret == null) return DeleteControl.defaultDelete();
 
-        Secret credentials = client.secrets().inNamespace(namespace).withName(secretName(user)).get();
+        Secret credentials = client.secrets()
+                .inNamespace(namespace)
+                .withName(secretName(user))
+                .get();
         String accessKey = credentials != null
                 ? secretValue(credentials, "accessKey")
                 : user.getStatus() == null ? null : user.getStatus().getAccessKeyId();

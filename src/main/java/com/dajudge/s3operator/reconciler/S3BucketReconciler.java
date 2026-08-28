@@ -114,7 +114,10 @@ public class S3BucketReconciler implements Reconciler<S3Bucket>, Cleaner<S3Bucke
     }
 
     private S3User requireUser(String namespace, String name) {
-        S3User user = client.resources(S3User.class).inNamespace(namespace).withName(name).get();
+        S3User user = client.resources(S3User.class)
+                .inNamespace(namespace)
+                .withName(name)
+                .get();
         if (user == null) throw new ReconciliationException(USER_NOT_FOUND, "S3User not found: " + name);
         ResourceValidation.validateUser(user);
         return user;
@@ -145,6 +148,7 @@ public class S3BucketReconciler implements Reconciler<S3Bucket>, Cleaner<S3Bucke
     }
 
     private static String bucketName(S3Bucket bucket) {
-        return defaultedName(bucket.getSpec().getBucketName(), bucket.getMetadata().getName());
+        return defaultedName(
+                bucket.getSpec().getBucketName(), bucket.getMetadata().getName());
     }
 }
