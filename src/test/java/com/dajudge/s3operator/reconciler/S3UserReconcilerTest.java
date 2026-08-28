@@ -4,7 +4,6 @@ import static com.dajudge.s3operator.reconciler.Fabric8TestMocks.stubResourceGet
 import static com.dajudge.s3operator.reconciler.Fabric8TestMocks.stubResourceList;
 import static com.dajudge.s3operator.reconciler.Fabric8TestMocks.stubSecrets;
 import static com.dajudge.s3operator.reconciler.ReconcilerTestFixtures.ENDPOINT;
-import static com.dajudge.s3operator.reconciler.ReconcilerTestFixtures.NS;
 import static com.dajudge.s3operator.reconciler.ReconcilerTestFixtures.backend;
 import static com.dajudge.s3operator.reconciler.ReconcilerTestFixtures.bucketReferencing;
 import static com.dajudge.s3operator.reconciler.ReconcilerTestFixtures.secret;
