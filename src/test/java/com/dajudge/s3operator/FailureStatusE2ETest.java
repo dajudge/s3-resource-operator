@@ -114,10 +114,14 @@ class FailureStatusE2ETest extends OperatorE2ETestSupport {
     private Condition awaitUserCondition(String name, String status, String reason) {
         final Condition[] result = new Condition[1];
         await().atMost(TIMEOUT).untilAsserted(() -> {
-            S3User user = client.resources(S3User.class).inNamespace(NS).withName(name).get();
+            S3User user = client.resources(S3User.class)
+                    .inNamespace(NS)
+                    .withName(name)
+                    .get();
             assertThat(user).isNotNull();
             assertThat(user.getStatus()).isNotNull();
-            assertThat(user.getStatus().getObservedGeneration()).isEqualTo(user.getMetadata().getGeneration());
+            assertThat(user.getStatus().getObservedGeneration())
+                    .isEqualTo(user.getMetadata().getGeneration());
             Condition condition = user.getStatus().getConditions().stream()
                     .filter(c -> "Ready".equals(c.getType()))
                     .findFirst()
@@ -131,10 +135,14 @@ class FailureStatusE2ETest extends OperatorE2ETestSupport {
     private Condition awaitBucketCondition(String name, String status, String reason) {
         final Condition[] result = new Condition[1];
         await().atMost(TIMEOUT).untilAsserted(() -> {
-            S3Bucket bucket = client.resources(S3Bucket.class).inNamespace(NS).withName(name).get();
+            S3Bucket bucket = client.resources(S3Bucket.class)
+                    .inNamespace(NS)
+                    .withName(name)
+                    .get();
             assertThat(bucket).isNotNull();
             assertThat(bucket.getStatus()).isNotNull();
-            assertThat(bucket.getStatus().getObservedGeneration()).isEqualTo(bucket.getMetadata().getGeneration());
+            assertThat(bucket.getStatus().getObservedGeneration())
+                    .isEqualTo(bucket.getMetadata().getGeneration());
             Condition condition = bucket.getStatus().getConditions().stream()
                     .filter(c -> "Ready".equals(c.getType()))
                     .findFirst()
@@ -146,26 +154,30 @@ class FailureStatusE2ETest extends OperatorE2ETestSupport {
     }
 
     private static void assertCondition(
-            io.fabric8.kubernetes.api.model.HasMetadata resource,
-            Condition condition,
-            String status,
-            String reason) {
+            io.fabric8.kubernetes.api.model.HasMetadata resource, Condition condition, String status, String reason) {
         assertThat(condition.getStatus()).isEqualTo(status);
         assertThat(condition.getReason()).isEqualTo(reason);
-        assertThat(condition.getObservedGeneration()).isEqualTo(resource.getMetadata().getGeneration());
+        assertThat(condition.getObservedGeneration())
+                .isEqualTo(resource.getMetadata().getGeneration());
         assertThat(condition.getMessage()).isNotBlank();
     }
 
     private void assertStableUserCondition(String name, Condition original) {
         await().during(Duration.ofSeconds(6)).atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
-            S3User user = client.resources(S3User.class).inNamespace(NS).withName(name).get();
+            S3User user = client.resources(S3User.class)
+                    .inNamespace(NS)
+                    .withName(name)
+                    .get();
             assertStableCondition(user.getStatus().getConditions(), original);
         });
     }
 
     private void assertStableBucketCondition(String name, Condition original) {
         await().during(Duration.ofSeconds(6)).atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
-            S3Bucket bucket = client.resources(S3Bucket.class).inNamespace(NS).withName(name).get();
+            S3Bucket bucket = client.resources(S3Bucket.class)
+                    .inNamespace(NS)
+                    .withName(name)
+                    .get();
             assertStableCondition(bucket.getStatus().getConditions(), original);
         });
     }
