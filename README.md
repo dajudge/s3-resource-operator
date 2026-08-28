@@ -5,9 +5,9 @@
 [![Published release E2E](https://github.com/dajudge/s3-resource-operator/actions/workflows/published-release-e2e.yml/badge.svg?branch=main)](https://github.com/dajudge/s3-resource-operator/actions/workflows/published-release-e2e.yml)
 [![GitHub Release](https://img.shields.io/github/v/release/dajudge/s3-resource-operator?display_name=release&sort=semver)](https://github.com/dajudge/s3-resource-operator/releases/latest)
 [![License](https://img.shields.io/github/license/dajudge/s3-resource-operator)](LICENSE)
-[![Line coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fdajudge%2Fs3-resource-operator%2Fbadges%2Fmetrics%2Fline-coverage.json)](https://github.com/dajudge/s3-resource-operator/actions/workflows/ci.yml)
-[![Branch coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fdajudge%2Fs3-resource-operator%2Fbadges%2Fmetrics%2Fbranch-coverage.json)](https://github.com/dajudge/s3-resource-operator/actions/workflows/ci.yml)
-[![PIT mutation score](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fdajudge%2Fs3-resource-operator%2Fbadges%2Fmetrics%2Fmutation-score.json)](https://github.com/dajudge/s3-resource-operator/actions/workflows/ci.yml)
+[![Line coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fdajudge%2Fs3-resource-operator%2Fbadges%2Fmetrics%2Fline-coverage.json)](https://github.com/dajudge/s3-resource-operator/tree/badges)
+[![Branch coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fdajudge%2Fs3-resource-operator%2Fbadges%2Fmetrics%2Fbranch-coverage.json)](https://github.com/dajudge/s3-resource-operator/tree/badges)
+[![PIT mutation score](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fdajudge%2Fs3-resource-operator%2Fbadges%2Fmetrics%2Fmutation-score.json)](https://github.com/dajudge/s3-resource-operator/tree/badges)
 
 Kubernetes operator for declarative S3 users and buckets.
 
