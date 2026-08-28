@@ -170,11 +170,14 @@ class S3UserReconcilerTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void preparesBackendAndSecretEventSources() {
         KubernetesClient client = mock(KubernetesClient.class);
         VersityS3Provider provider = mock(VersityS3Provider.class);
+        EventSourceContext<S3User> context = mock(EventSourceContext.class);
+        when(context.getClient()).thenReturn(client);
 
-        assertThat(reconciler(client, provider).prepareEventSources(mock(EventSourceContext.class))).hasSize(2);
+        assertThat(reconciler(client, provider).prepareEventSources(context)).hasSize(2);
     }
 
     @Test
