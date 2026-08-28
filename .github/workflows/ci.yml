@@ -434,11 +434,9 @@ jobs:
                   junit['skipped'] += int(suite.attrib.get('skipped', 0))
                   junit_time += float(suite.attrib.get('time', 0.0))
 
-          line_covered, line_missed = counters['LINE']
-          branch_covered, branch_missed = counters['BRANCH']
           write_badge('line-coverage', 'line coverage', coverage['LINE'])
           write_badge('branch-coverage', 'branch coverage', coverage['BRANCH'])
-          write_badge('mutation-score', 'mutation score', mutation_score)
+          write_badge('mutation-score', 'reconciler mutation score', mutation_score)
 
           repository = os.environ['REPOSITORY']
           commit_sha = os.environ['COMMIT_SHA']
@@ -471,7 +469,7 @@ jobs:
 
           [![Line coverage]({shields}{raw_base}/line-coverage.json)]({run_url})
           [![Branch coverage]({shields}{raw_base}/branch-coverage.json)]({run_url})
-          [![Mutation score]({shields}{raw_base}/mutation-score.json)]({run_url})
+          [![Reconciler mutation score]({shields}{raw_base}/mutation-score.json)]({run_url})
 
           ## JUnit
 
@@ -490,11 +488,13 @@ jobs:
           | --- | ---: | ---: |
           {chr(10).join(coverage_rows)}
 
-          ## PIT mutation testing
+          ## PIT mutation testing (configured reconciler scope)
+
+          The normal PIT profile covers `ResourceValidation`, `ReconcilerSupport`, `S3UserReconciler`, and `S3BucketReconciler`. It is not a project-wide mutation score.
 
           | Metric | Result |
           | --- | ---: |
-          | Mutation score | **{format_percentage(mutation_score)}** |
+          | Reconciler-scope mutation score | **{format_percentage(mutation_score)}** |
           | Detected | **{detected} / {len(mutations)}** |
           {chr(10).join(mutation_rows)}
 
