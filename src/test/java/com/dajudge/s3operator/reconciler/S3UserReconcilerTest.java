@@ -1,5 +1,8 @@
 package com.dajudge.s3operator.reconciler;
 
+import static com.dajudge.s3operator.reconciler.Fabric8TestMocks.stubResourceGet;
+import static com.dajudge.s3operator.reconciler.Fabric8TestMocks.stubResourceList;
+import static com.dajudge.s3operator.reconciler.Fabric8TestMocks.stubSecrets;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -20,8 +23,6 @@ import com.dajudge.s3operator.api.S3UserSpec;
 import com.dajudge.s3operator.api.S3UserStatus;
 import com.dajudge.s3operator.provider.S3ProviderException;
 import com.dajudge.s3operator.provider.VersityS3Provider;
-import io.fabric8.kubernetes.api.model.HasMetadata;
-import io.fabric8.kubernetes.api.model.KubernetesResourceList;
 import io.fabric8.kubernetes.api.model.LocalObjectReference;
 import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
 import io.fabric8.kubernetes.api.model.Secret;
@@ -29,7 +30,6 @@ import io.fabric8.kubernetes.api.model.SecretBuilder;
 import io.fabric8.kubernetes.api.model.SecretList;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.dsl.MixedOperation;
-import io.fabric8.kubernetes.client.dsl.NonNamespaceOperation;
 import io.fabric8.kubernetes.client.dsl.Resource;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.api.reconciler.EventSourceContext;
@@ -273,45 +273,6 @@ class S3UserReconcilerTest {
         stubSecrets(client, new SecretResult("admin", admin), new SecretResult(credentialsName, credentials));
     }
 
-    @SuppressWarnings("unchecked")
-    private static <T extends HasMetadata> void stubResourceGet(
-            KubernetesClient client, Class<T> type, String name, T value) {
-        MixedOperation<T, KubernetesResourceList<T>, Resource<T>> operation = mock(MixedOperation.class);
-        NonNamespaceOperation<T, KubernetesResourceList<T>, Resource<T>> namespaced = mock(NonNamespaceOperation.class);
-        Resource<T> resource = mock(Resource.class);
-        when(client.resources(type)).thenReturn(operation);
-        when(operation.inNamespace(NS)).thenReturn(namespaced);
-        when(namespaced.withName(name)).thenReturn(resource);
-        when(resource.get()).thenReturn(value);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static <T extends HasMetadata> void stubResourceList(
-            KubernetesClient client, Class<T> type, List<T> items) {
-        MixedOperation<T, KubernetesResourceList<T>, Resource<T>> operation = mock(MixedOperation.class);
-        NonNamespaceOperation<T, KubernetesResourceList<T>, Resource<T>> namespaced = mock(NonNamespaceOperation.class);
-        KubernetesResourceList<T> list = mock(KubernetesResourceList.class);
-        when(client.resources(type)).thenReturn(operation);
-        when(operation.inNamespace(NS)).thenReturn(namespaced);
-        when(namespaced.list()).thenReturn(list);
-        when(list.getItems()).thenReturn(items);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static MixedOperation<Secret, SecretList, Resource<Secret>> stubSecrets(
-            KubernetesClient client, SecretResult... results) {
-        MixedOperation<Secret, SecretList, Resource<Secret>> operation = mock(MixedOperation.class);
-        NonNamespaceOperation<Secret, SecretList, Resource<Secret>> namespaced = mock(NonNamespaceOperation.class);
-        when(client.secrets()).thenReturn(operation);
-        when(operation.inNamespace(NS)).thenReturn(namespaced);
-        for (SecretResult result : results) {
-            Resource<Secret> resource = mock(Resource.class);
-            when(namespaced.withName(result.name())).thenReturn(resource);
-            when(resource.get()).thenReturn(result.secret());
-        }
-        return operation;
-    }
-
     private static S3User user(String name, String backendRef, String secretName) {
         S3UserSpec spec = new S3UserSpec();
         spec.setBackendRef(backendRef);
@@ -359,6 +320,4 @@ class S3UserReconcilerTest {
                 .addToStringData("secretKey", secretKey)
                 .build();
     }
-
-    private record SecretResult(String name, Secret secret) {}
 }
