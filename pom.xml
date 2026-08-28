@@ -35,6 +35,7 @@
     <spotless.ratchetFrom>origin/main</spotless.ratchetFrom>
     <skipITs>true</skipITs>
     <skipUnitTests>false</skipUnitTests>
+    <argLine></argLine>
   </properties>
 
   <dependencyManagement>
@@ -229,6 +230,7 @@
         <version>3.5.3</version>
         <configuration>
           <skipTests>${skipUnitTests}</skipTests>
+          <argLine>@{argLine} -javaagent:"${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar"</argLine>
           <systemPropertyVariables>
             <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
             <quarkus.jacoco.reuse-data-file>true</quarkus.jacoco.reuse-data-file>
