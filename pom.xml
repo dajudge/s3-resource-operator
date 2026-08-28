@@ -208,11 +208,13 @@
             <param>com.dajudge.s3operator.reconciler.ResourceValidation*</param>
             <param>com.dajudge.s3operator.reconciler.ReconcilerSupport*</param>
             <param>com.dajudge.s3operator.reconciler.S3UserReconciler*</param>
+            <param>com.dajudge.s3operator.reconciler.S3BucketReconciler*</param>
           </targetClasses>
           <targetTests>
             <param>com.dajudge.s3operator.reconciler.ResourceValidationTest*</param>
             <param>com.dajudge.s3operator.reconciler.ReconcilerSupportTest*</param>
             <param>com.dajudge.s3operator.reconciler.S3UserReconcilerTest*</param>
+            <param>com.dajudge.s3operator.reconciler.S3BucketReconcilerTest*</param>
           </targetTests>
           <outputFormats>
             <param>HTML</param>
