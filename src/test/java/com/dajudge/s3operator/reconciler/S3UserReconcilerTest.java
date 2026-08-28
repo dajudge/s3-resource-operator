@@ -159,7 +159,8 @@ class S3UserReconcilerTest {
         invalidBackend.setSpec(new S3BackendSpec());
         stubResourceGet(invalidBackendClient, S3Backend.class, "backend", invalidBackend);
 
-        var invalidBackendControl = reconciler(invalidBackendClient, provider).reconcile(validUser, mock(Context.class));
+        var invalidBackendControl =
+                reconciler(invalidBackendClient, provider).reconcile(validUser, mock(Context.class));
 
         assertThat(invalidBackendControl).isNotNull();
         assertThat(validUser.getStatus().getConditions()).singleElement().satisfies(condition -> {
@@ -206,7 +207,8 @@ class S3UserReconcilerTest {
         KubernetesClient missingBackendClient = mock(KubernetesClient.class);
         stubResourceList(missingBackendClient, S3Bucket.class, List.of());
         stubResourceGet(missingBackendClient, S3Backend.class, "backend", null);
-        assertThat(reconciler(missingBackendClient, provider).cleanup(user("alice", "backend", null), mock(Context.class)))
+        assertThat(reconciler(missingBackendClient, provider)
+                        .cleanup(user("alice", "backend", null), mock(Context.class)))
                 .isNotNull();
 
         KubernetesClient unsupportedBackendClient = mock(KubernetesClient.class);
@@ -215,16 +217,16 @@ class S3UserReconcilerTest {
         unsupported.getSpec().setProvider("other");
         stubResourceGet(unsupportedBackendClient, S3Backend.class, "backend", unsupported);
         when(provider.type()).thenReturn("versity");
-        assertThat(
-                        reconciler(unsupportedBackendClient, provider)
-                                .cleanup(user("alice", "backend", null), mock(Context.class)))
+        assertThat(reconciler(unsupportedBackendClient, provider)
+                        .cleanup(user("alice", "backend", null), mock(Context.class)))
                 .isNotNull();
 
         KubernetesClient missingAdminClient = mock(KubernetesClient.class);
         stubResourceList(missingAdminClient, S3Bucket.class, List.of());
         stubResourceGet(missingAdminClient, S3Backend.class, "backend", backend());
         stubSecrets(missingAdminClient, new SecretResult("admin", null));
-        assertThat(reconciler(missingAdminClient, provider).cleanup(user("alice", "backend", null), mock(Context.class)))
+        assertThat(reconciler(missingAdminClient, provider)
+                        .cleanup(user("alice", "backend", null), mock(Context.class)))
                 .isNotNull();
     }
 
