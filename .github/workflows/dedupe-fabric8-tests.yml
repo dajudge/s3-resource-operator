@@ -1,0 +1,124 @@
+name: Temporary Fabric8 test deduplication
+
+on:
+  push:
+    branches:
+      - test/pit-s3bucket-reconciler
+
+permissions:
+  contents: write
+
+jobs:
+  dedupe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Extract shared Fabric8 mock helpers
+        run: |
+          cat > src/test/java/com/dajudge/s3operator/reconciler/Fabric8TestMocks.java <<'EOF'
+          package com.dajudge.s3operator.reconciler;
+
+          import static org.mockito.Mockito.mock;
+          import static org.mockito.Mockito.when;
+
+          import io.fabric8.kubernetes.api.model.HasMetadata;
+          import io.fabric8.kubernetes.api.model.KubernetesResourceList;
+          import io.fabric8.kubernetes.api.model.Secret;
+          import io.fabric8.kubernetes.api.model.SecretList;
+          import io.fabric8.kubernetes.client.KubernetesClient;
+          import io.fabric8.kubernetes.client.dsl.MixedOperation;
+          import io.fabric8.kubernetes.client.dsl.NonNamespaceOperation;
+          import io.fabric8.kubernetes.client.dsl.Resource;
+          import java.util.List;
+
+          final class Fabric8TestMocks {
+              private static final String NS = "ns";
+
+              private Fabric8TestMocks() {}
+
+              @SuppressWarnings("unchecked")
+              static <T extends HasMetadata> void stubResourceGet(
+                      KubernetesClient client, Class<T> type, String name, T value) {
+                  MixedOperation<T, KubernetesResourceList<T>, Resource<T>> operation = mock(MixedOperation.class);
+                  NonNamespaceOperation<T, KubernetesResourceList<T>, Resource<T>> namespaced =
+                          mock(NonNamespaceOperation.class);
+                  Resource<T> resource = mock(Resource.class);
+                  when(client.resources(type)).thenReturn(operation);
+                  when(operation.inNamespace(NS)).thenReturn(namespaced);
+                  when(namespaced.withName(name)).thenReturn(resource);
+                  when(resource.get()).thenReturn(value);
+              }
+
+              @SuppressWarnings("unchecked")
+              static <T extends HasMetadata> void stubResourceList(
+                      KubernetesClient client, Class<T> type, List<T> items) {
+                  MixedOperation<T, KubernetesResourceList<T>, Resource<T>> operation = mock(MixedOperation.class);
+                  NonNamespaceOperation<T, KubernetesResourceList<T>, Resource<T>> namespaced =
+                          mock(NonNamespaceOperation.class);
+                  KubernetesResourceList<T> list = mock(KubernetesResourceList.class);
+                  when(client.resources(type)).thenReturn(operation);
+                  when(operation.inNamespace(NS)).thenReturn(namespaced);
+                  when(namespaced.list()).thenReturn(list);
+                  when(list.getItems()).thenReturn(items);
+              }
+
+              @SuppressWarnings("unchecked")
+              static MixedOperation<Secret, SecretList, Resource<Secret>> stubSecrets(
+                      KubernetesClient client, SecretResult... results) {
+                  MixedOperation<Secret, SecretList, Resource<Secret>> operation = mock(MixedOperation.class);
+                  NonNamespaceOperation<Secret, SecretList, Resource<Secret>> namespaced =
+                          mock(NonNamespaceOperation.class);
+                  when(client.secrets()).thenReturn(operation);
+                  when(operation.inNamespace(NS)).thenReturn(namespaced);
+                  for (SecretResult result : results) {
+                      Resource<Secret> resource = mock(Resource.class);
+                      when(namespaced.withName(result.name())).thenReturn(resource);
+                      when(resource.get()).thenReturn(result.secret());
+                  }
+                  return operation;
+              }
+          }
+
+          record SecretResult(String name, Secret secret) {}
+          EOF
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          for name in ('S3UserReconcilerTest.java', 'S3BucketReconcilerTest.java'):
+              p = Path('src/test/java/com/dajudge/s3operator/reconciler') / name
+              s = p.read_text()
+              marker = 'import static org.assertj.core.api.Assertions.assertThat;\n'
+              imports = (
+                  'import static com.dajudge.s3operator.reconciler.Fabric8TestMocks.stubResourceGet;\n'
+                  'import static com.dajudge.s3operator.reconciler.Fabric8TestMocks.stubSecrets;\n'
+              )
+              if name == 'S3UserReconcilerTest.java':
+                  imports += 'import static com.dajudge.s3operator.reconciler.Fabric8TestMocks.stubResourceList;\n'
+              if 'Fabric8TestMocks.stubResourceGet' not in s:
+                  s = s.replace(marker, imports + marker, 1)
+
+              start = s.index('    @SuppressWarnings("unchecked")\n    private static <T extends HasMetadata> void stubResourceGet(')
+              if name == 'S3UserReconcilerTest.java':
+                  end = s.index('    private static S3User user(', start)
+              else:
+                  end = s.index('    private static void assertFailure(', start)
+              s = s[:start] + s[end:]
+              s = s.replace('\n    private record SecretResult(String name, Secret secret) {}\n', '\n')
+              p.write_text(s)
+          PY
+
+          mvn --batch-mode --no-transfer-progress spotless:apply -Dspotless.ratchetFrom=origin/main
+          git rm .github/workflows/dedupe-fabric8-tests.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "Share Fabric8 reconciler test mocks"
+          git push
