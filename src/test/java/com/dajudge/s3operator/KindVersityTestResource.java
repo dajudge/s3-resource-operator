@@ -2,7 +2,7 @@ package com.dajudge.s3operator;
 
 import static io.fabric8.kubernetes.client.Config.fromKubeconfig;
 
-import com.dajudge.kindcontainer.KindContainer;
+import com.dajudge.kindcontainer.K3sContainer;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientBuilder;
 import io.fabric8.kubernetes.client.LocalPortForward;
@@ -41,7 +41,7 @@ public class KindVersityTestResource implements QuarkusTestResourceLifecycleMana
     @Override
     public void stop() {
         // Quarkus restarts test resources when switching test profiles. Keep the expensive
-        // Kind/Versity environment alive for the whole test JVM and clean it up from the
+        // K3s/Versity environment alive for the whole test JVM and clean it up from the
         // shutdown hook instead.
     }
 
@@ -57,7 +57,7 @@ public class KindVersityTestResource implements QuarkusTestResourceLifecycleMana
     }
 
     private record SharedEnvironment(
-            KindContainer<?> kube,
+            K3sContainer<?> kube,
             KubernetesClient client,
             LocalPortForward portForward,
             Path kubeconfig,
@@ -65,12 +65,12 @@ public class KindVersityTestResource implements QuarkusTestResourceLifecycleMana
             String endpoint) {
 
         private static SharedEnvironment start() {
-            KindContainer<?> kube = null;
+            K3sContainer<?> kube = null;
             KubernetesClient client = null;
             LocalPortForward portForward = null;
             Path kubeconfig = null;
             try {
-                kube = new KindContainer<>()
+                kube = new K3sContainer<>()
                         .withKubectl(kubectl -> kubectl.apply
                                 .namespace("default")
                                 .fileFromClasspath("versitygw.yaml")
@@ -100,7 +100,7 @@ public class KindVersityTestResource implements QuarkusTestResourceLifecycleMana
                 return new SharedEnvironment(kube, client, portForward, kubeconfig, kubeconfigPath, endpoint);
             } catch (Exception e) {
                 close(portForward, client, kube, kubeconfig);
-                throw new RuntimeException("Unable to start Kindcontainer/Versity test environment", e);
+                throw new RuntimeException("Unable to start K3s/Versity test environment", e);
             }
         }
 
@@ -116,7 +116,7 @@ public class KindVersityTestResource implements QuarkusTestResourceLifecycleMana
         }
 
         private static void close(
-                LocalPortForward portForward, KubernetesClient client, KindContainer<?> kube, Path kubeconfig) {
+                LocalPortForward portForward, KubernetesClient client, K3sContainer<?> kube, Path kubeconfig) {
             if (portForward != null) {
                 try {
                     portForward.close();
