@@ -16,6 +16,7 @@ import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
 import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.api.model.SecretBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
+import io.fabric8.kubernetes.client.KubernetesClientException;
 import jakarta.inject.Inject;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -92,6 +93,32 @@ abstract class OperatorE2ETestSupport {
                 new ObjectMetaBuilder().withName(name).withNamespace(NS).build());
         bucket.setSpec(spec);
         client.resources(S3Bucket.class).inNamespace(NS).resource(bucket).create();
+    }
+
+    protected void createBucket(
+            String name, String backendRef, String userRef, String bucketName, S3BucketSpec.DeletionPolicy policy) {
+        S3BucketSpec spec = new S3BucketSpec();
+        spec.setBackendRef(backendRef);
+        spec.setUserRef(userRef);
+        if (bucketName != null) spec.setBucketName(bucketName);
+        if (policy != null) spec.setDeletionPolicy(policy);
+        S3Bucket bucket = new S3Bucket();
+        bucket.setMetadata(
+                new ObjectMetaBuilder().withName(name).withNamespace(NS).build());
+        bucket.setSpec(spec);
+        client.resources(S3Bucket.class).inNamespace(NS).resource(bucket).create();
+    }
+
+    protected void forceUserReconcile(String name, String role) {
+        await().atMost(TIMEOUT)
+                .ignoreException(KubernetesClientException.class)
+                .untilAsserted(() -> client.resources(S3User.class)
+                        .inNamespace(NS)
+                        .withName(name)
+                        .edit(user -> {
+                            user.getSpec().setRole(role);
+                            return user;
+                        }));
     }
 
     protected S3User awaitUser(String name, String status, String reason) {
