@@ -21,12 +21,16 @@ import com.dajudge.s3operator.api.S3UserSpec;
 import com.dajudge.s3operator.api.S3UserStatus;
 import com.dajudge.s3operator.provider.S3ProviderException;
 import com.dajudge.s3operator.provider.VersityS3Provider;
+import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.KubernetesResourceList;
 import io.fabric8.kubernetes.api.model.LocalObjectReference;
 import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
 import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.api.model.SecretBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
+import io.fabric8.kubernetes.client.dsl.MixedOperation;
+import io.fabric8.kubernetes.client.dsl.NonNamespaceOperation;
+import io.fabric8.kubernetes.client.dsl.Resource;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import java.time.Duration;
 import java.util.List;
@@ -71,17 +75,12 @@ class S3UserReconcilerTest {
         VersityS3Provider provider = mock(VersityS3Provider.class);
         S3User user = user("alice", "backend", "custom-credentials");
         when(provider.type()).thenReturn("versity");
-        when(client.resources(S3Backend.class)
-                        .inNamespace(NS)
-                        .withName("backend")
-                        .get())
-                .thenReturn(backend());
+        stubResourceGet(client, S3Backend.class, "backend", backend());
         when(client.secrets().inNamespace(NS).withName("admin").get())
                 .thenReturn(secret("admin", "admin-access", "admin-secret"));
         when(client.secrets().inNamespace(NS).withName("custom-credentials").get())
                 .thenReturn(null);
-        when(client.secrets().resource(any(Secret.class)).create())
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(client.secrets().resource(any(Secret.class)).create()).thenAnswer(invocation -> invocation.getArgument(0));
 
         reconciler(client, provider).reconcile(user, mock(Context.class));
 
@@ -147,7 +146,7 @@ class S3UserReconcilerTest {
         spec.setBackendRef("backend");
         spec.setUserRef("alice");
         bucket.setSpec(spec);
-        when(bucketList(client).getItems()).thenReturn(List.of(bucket));
+        stubResourceList(client, S3Bucket.class, List.of(bucket));
 
         assertThatThrownBy(() -> reconciler(client, provider).cleanup(user, mock(Context.class)))
                 .isInstanceOf(IllegalStateException.class)
@@ -163,13 +162,9 @@ class S3UserReconcilerTest {
         S3UserStatus status = new S3UserStatus();
         status.setAccessKeyId("status-access");
         user.setStatus(status);
-        when(bucketList(client).getItems()).thenReturn(List.of());
+        stubResourceList(client, S3Bucket.class, List.of());
         when(provider.type()).thenReturn("versity");
-        when(client.resources(S3Backend.class)
-                        .inNamespace(NS)
-                        .withName("backend")
-                        .get())
-                .thenReturn(backend());
+        stubResourceGet(client, S3Backend.class, "backend", backend());
         when(client.secrets().inNamespace(NS).withName("admin").get())
                 .thenReturn(secret("admin", "admin-access", "admin-secret"));
         when(client.secrets().inNamespace(NS).withName("alice-s3").get()).thenReturn(null);
@@ -177,11 +172,6 @@ class S3UserReconcilerTest {
         reconciler(client, provider).cleanup(user, mock(Context.class));
 
         verify(provider).deleteUser(ENDPOINT, "admin-access", "admin-secret", "status-access");
-    }
-
-    @SuppressWarnings("unchecked")
-    private static KubernetesResourceList<S3Bucket> bucketList(KubernetesClient client) {
-        return client.resources(S3Bucket.class).inNamespace(NS).list();
     }
 
     private static S3UserReconciler reconciler(KubernetesClient client, VersityS3Provider provider) {
@@ -201,14 +191,32 @@ class S3UserReconcilerTest {
             String credentialsName,
             Secret credentials) {
         when(provider.type()).thenReturn("versity");
-        when(client.resources(S3Backend.class)
-                        .inNamespace(NS)
-                        .withName("backend")
-                        .get())
-                .thenReturn(backend);
+        stubResourceGet(client, S3Backend.class, "backend", backend);
         when(client.secrets().inNamespace(NS).withName("admin").get()).thenReturn(admin);
-        when(client.secrets().inNamespace(NS).withName(credentialsName).get())
-                .thenReturn(credentials);
+        when(client.secrets().inNamespace(NS).withName(credentialsName).get()).thenReturn(credentials);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T extends HasMetadata> void stubResourceGet(
+            KubernetesClient client, Class<T> type, String name, T value) {
+        MixedOperation<T, KubernetesResourceList<T>, Resource<T>> operation = mock(MixedOperation.class);
+        NonNamespaceOperation<T, KubernetesResourceList<T>, Resource<T>> namespaced = mock(NonNamespaceOperation.class);
+        Resource<T> resource = mock(Resource.class);
+        when(client.resources(type)).thenReturn(operation);
+        when(operation.inNamespace(NS)).thenReturn(namespaced);
+        when(namespaced.withName(name)).thenReturn(resource);
+        when(resource.get()).thenReturn(value);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T extends HasMetadata> void stubResourceList(KubernetesClient client, Class<T> type, List<T> items) {
+        MixedOperation<T, KubernetesResourceList<T>, Resource<T>> operation = mock(MixedOperation.class);
+        NonNamespaceOperation<T, KubernetesResourceList<T>, Resource<T>> namespaced = mock(NonNamespaceOperation.class);
+        KubernetesResourceList<T> list = mock(KubernetesResourceList.class);
+        when(client.resources(type)).thenReturn(operation);
+        when(operation.inNamespace(NS)).thenReturn(namespaced);
+        when(namespaced.list()).thenReturn(list);
+        when(list.getItems()).thenReturn(items);
     }
 
     private static S3User user(String name, String backendRef, String secretName) {
