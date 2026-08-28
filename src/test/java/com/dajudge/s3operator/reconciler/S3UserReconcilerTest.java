@@ -3,6 +3,12 @@ package com.dajudge.s3operator.reconciler;
 import static com.dajudge.s3operator.reconciler.Fabric8TestMocks.stubResourceGet;
 import static com.dajudge.s3operator.reconciler.Fabric8TestMocks.stubResourceList;
 import static com.dajudge.s3operator.reconciler.Fabric8TestMocks.stubSecrets;
+import static com.dajudge.s3operator.reconciler.ReconcilerTestFixtures.ENDPOINT;
+import static com.dajudge.s3operator.reconciler.ReconcilerTestFixtures.NS;
+import static com.dajudge.s3operator.reconciler.ReconcilerTestFixtures.backend;
+import static com.dajudge.s3operator.reconciler.ReconcilerTestFixtures.bucketReferencing;
+import static com.dajudge.s3operator.reconciler.ReconcilerTestFixtures.secret;
+import static com.dajudge.s3operator.reconciler.ReconcilerTestFixtures.user;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -17,16 +23,11 @@ import static org.mockito.Mockito.when;
 import com.dajudge.s3operator.api.S3Backend;
 import com.dajudge.s3operator.api.S3BackendSpec;
 import com.dajudge.s3operator.api.S3Bucket;
-import com.dajudge.s3operator.api.S3BucketSpec;
 import com.dajudge.s3operator.api.S3User;
-import com.dajudge.s3operator.api.S3UserSpec;
 import com.dajudge.s3operator.api.S3UserStatus;
 import com.dajudge.s3operator.provider.S3ProviderException;
 import com.dajudge.s3operator.provider.VersityS3Provider;
-import io.fabric8.kubernetes.api.model.LocalObjectReference;
-import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
 import io.fabric8.kubernetes.api.model.Secret;
-import io.fabric8.kubernetes.api.model.SecretBuilder;
 import io.fabric8.kubernetes.api.model.SecretList;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.dsl.MixedOperation;
@@ -40,8 +41,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 class S3UserReconcilerTest {
-    private static final String NS = "ns";
-    private static final String ENDPOINT = "http://versity:7070";
 
     @Test
     void reconcilesExistingCredentialsAndPublishesReadyStatus() {
@@ -271,53 +270,5 @@ class S3UserReconcilerTest {
         when(provider.type()).thenReturn("versity");
         stubResourceGet(client, S3Backend.class, "backend", backend);
         stubSecrets(client, new SecretResult("admin", admin), new SecretResult(credentialsName, credentials));
-    }
-
-    private static S3User user(String name, String backendRef, String secretName) {
-        S3UserSpec spec = new S3UserSpec();
-        spec.setBackendRef(backendRef);
-        spec.setSecretName(secretName);
-        S3User user = new S3User();
-        user.setApiVersion("s3.dajudge.com/v1alpha1");
-        user.setKind("S3User");
-        user.setMetadata(new ObjectMetaBuilder()
-                .withName(name)
-                .withNamespace(NS)
-                .withUid("uid")
-                .withGeneration(7L)
-                .build());
-        user.setSpec(spec);
-        return user;
-    }
-
-    private static S3Bucket bucketReferencing(String userName) {
-        S3BucketSpec spec = new S3BucketSpec();
-        spec.setBackendRef("backend");
-        spec.setUserRef(userName);
-        S3Bucket bucket = new S3Bucket();
-        bucket.setSpec(spec);
-        return bucket;
-    }
-
-    private static S3Backend backend() {
-        LocalObjectReference ref = new LocalObjectReference();
-        ref.setName("admin");
-        S3BackendSpec spec = new S3BackendSpec();
-        spec.setProvider("versity");
-        spec.setEndpoint(ENDPOINT);
-        spec.setAdminCredentialsSecretRef(ref);
-        S3Backend backend = new S3Backend();
-        backend.setSpec(spec);
-        return backend;
-    }
-
-    private static Secret secret(String name, String accessKey, String secretKey) {
-        return new SecretBuilder()
-                .withNewMetadata()
-                .withName(name)
-                .endMetadata()
-                .addToStringData("accessKey", accessKey)
-                .addToStringData("secretKey", secretKey)
-                .build();
     }
 }
