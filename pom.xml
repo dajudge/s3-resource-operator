@@ -25,6 +25,9 @@
     <spotbugs-maven-plugin.version>4.10.3.0</spotbugs-maven-plugin.version>
     <maven-pmd-plugin.version>3.28.0</maven-pmd-plugin.version>
     <license-maven-plugin.version>2.7.1</license-maven-plugin.version>
+    <jacoco-maven-plugin.version>0.8.15</jacoco-maven-plugin.version>
+    <pitest-maven.version>1.25.9</pitest-maven.version>
+    <pitest-junit5-plugin.version>1.2.3</pitest-junit5-plugin.version>
     <skipITs>true</skipITs>
     <skipUnitTests>false</skipUnitTests>
   </properties>
@@ -125,6 +128,54 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
         <version>3.14.0</version>
+      </plugin>
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <version>${jacoco-maven-plugin.version}</version>
+        <executions>
+          <execution>
+            <id>prepare-jacoco-agent</id>
+            <goals>
+              <goal>prepare-agent</goal>
+            </goals>
+          </execution>
+          <execution>
+            <id>jacoco-report</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>report</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.pitest</groupId>
+        <artifactId>pitest-maven</artifactId>
+        <version>${pitest-maven.version}</version>
+        <dependencies>
+          <dependency>
+            <groupId>org.pitest</groupId>
+            <artifactId>pitest-junit5-plugin</artifactId>
+            <version>${pitest-junit5-plugin.version}</version>
+          </dependency>
+        </dependencies>
+        <configuration>
+          <targetClasses>
+            <param>com.dajudge.s3operator.reconciler.ResourceValidation*</param>
+          </targetClasses>
+          <targetTests>
+            <param>com.dajudge.s3operator.reconciler.ResourceValidationTest*</param>
+          </targetTests>
+          <outputFormats>
+            <param>HTML</param>
+            <param>XML</param>
+          </outputFormats>
+          <timestampedReports>false</timestampedReports>
+          <failWhenNoMutations>false</failWhenNoMutations>
+          <mutationThreshold>0</mutationThreshold>
+          <coverageThreshold>0</coverageThreshold>
+        </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
