@@ -32,7 +32,8 @@ final class RelatedResourceEventSources {
     }
 
     static <P extends HasMetadata> Set<ResourceID> matching(EventSourceContext<P> context, Predicate<P> predicate) {
-        return context.getPrimaryCache().list()
+        return context.getPrimaryCache()
+                .list()
                 .filter(predicate)
                 .map(ResourceID::fromResource)
                 .collect(Collectors.toSet());
@@ -47,7 +48,9 @@ final class RelatedResourceEventSources {
                         context,
                         user -> ResourceValidation.hasUsableUserSpec(user)
                                 && sameNamespace(user, backend)
-                                && backend.getMetadata().getName().equals(user.getSpec().getBackendRef())));
+                                && backend.getMetadata()
+                                        .getName()
+                                        .equals(user.getSpec().getBackendRef())));
         var secrets = informer(
                 Secret.class,
                 S3User.class,
@@ -66,15 +69,20 @@ final class RelatedResourceEventSources {
                 .withName(user.getSpec().getBackendRef())
                 .get();
         return ResourceValidation.hasUsableBackendSpec(backend)
-                && secret.getMetadata().getName().equals(backend.getSpec().getAdminCredentialsSecretRef().getName());
+                && secret.getMetadata()
+                        .getName()
+                        .equals(backend.getSpec().getAdminCredentialsSecretRef().getName());
     }
 
     private static boolean sameNamespace(HasMetadata primary, HasMetadata secondary) {
-        return primary.getMetadata().getNamespace().equals(secondary.getMetadata().getNamespace());
+        return primary.getMetadata()
+                .getNamespace()
+                .equals(secondary.getMetadata().getNamespace());
     }
 
     private static String userSecretName(S3User user) {
-        return user.getSpec().getSecretName() == null || user.getSpec().getSecretName().isBlank()
+        return user.getSpec().getSecretName() == null
+                        || user.getSpec().getSecretName().isBlank()
                 ? user.getMetadata().getName() + "-s3"
                 : user.getSpec().getSecretName();
     }
