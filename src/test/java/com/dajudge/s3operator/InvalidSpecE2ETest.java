@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 @QuarkusTest
-@QuarkusTestResource(KindVersityTestResource.class)
+@QuarkusTestResource(K3sVersityTestResource.class)
 class InvalidSpecE2ETest {
     private static final String NS = "default";
     private static final Duration TIMEOUT = Duration.ofSeconds(20);
