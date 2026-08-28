@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -27,6 +26,7 @@ import io.fabric8.kubernetes.api.model.LocalObjectReference;
 import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
 import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.api.model.SecretBuilder;
+import io.fabric8.kubernetes.api.model.SecretList;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.dsl.MixedOperation;
 import io.fabric8.kubernetes.client.dsl.NonNamespaceOperation;
@@ -42,7 +42,7 @@ class S3UserReconcilerTest {
 
     @Test
     void reconcilesExistingCredentialsAndPublishesReadyStatus() {
-        KubernetesClient client = mock(KubernetesClient.class, RETURNS_DEEP_STUBS);
+        KubernetesClient client = mock(KubernetesClient.class);
         VersityS3Provider provider = mock(VersityS3Provider.class);
         S3User user = user("alice", "backend", null);
         stubDependencies(
@@ -71,16 +71,22 @@ class S3UserReconcilerTest {
 
     @Test
     void usesConfiguredSecretNameAndCreatesCredentialsWhenMissing() {
-        KubernetesClient client = mock(KubernetesClient.class, RETURNS_DEEP_STUBS);
+        KubernetesClient client = mock(KubernetesClient.class);
         VersityS3Provider provider = mock(VersityS3Provider.class);
         S3User user = user("alice", "backend", "custom-credentials");
         when(provider.type()).thenReturn("versity");
         stubResourceGet(client, S3Backend.class, "backend", backend());
-        when(client.secrets().inNamespace(NS).withName("admin").get())
-                .thenReturn(secret("admin", "admin-access", "admin-secret"));
-        when(client.secrets().inNamespace(NS).withName("custom-credentials").get())
-                .thenReturn(null);
-        when(client.secrets().resource(any(Secret.class)).create()).thenAnswer(invocation -> invocation.getArgument(0));
+        MixedOperation<Secret, SecretList, Resource<Secret>> secrets = stubSecrets(
+                client,
+                new SecretResult("admin", secret("admin", "admin-access", "admin-secret")),
+                new SecretResult("custom-credentials", null));
+        when(secrets.resource(any(Secret.class))).thenAnswer(invocation -> {
+            Secret created = invocation.getArgument(0);
+            @SuppressWarnings("unchecked")
+            Resource<Secret> resource = mock(Resource.class);
+            when(resource.create()).thenReturn(created);
+            return resource;
+        });
 
         reconciler(client, provider).reconcile(user, mock(Context.class));
 
@@ -97,7 +103,7 @@ class S3UserReconcilerTest {
 
     @Test
     void translatesProviderErrorsIntoRetryableStatus() {
-        KubernetesClient client = mock(KubernetesClient.class, RETURNS_DEEP_STUBS);
+        KubernetesClient client = mock(KubernetesClient.class);
         VersityS3Provider provider = mock(VersityS3Provider.class);
         S3User user = user("alice", "backend", null);
         stubDependencies(
@@ -122,7 +128,7 @@ class S3UserReconcilerTest {
 
     @Test
     void invalidSpecSetsFailureWithoutCallingProvider() {
-        KubernetesClient client = mock(KubernetesClient.class, RETURNS_DEEP_STUBS);
+        KubernetesClient client = mock(KubernetesClient.class);
         VersityS3Provider provider = mock(VersityS3Provider.class);
         S3User user = user("alice", null, null);
 
@@ -138,7 +144,7 @@ class S3UserReconcilerTest {
 
     @Test
     void cleanupRejectsReferencedUser() {
-        KubernetesClient client = mock(KubernetesClient.class, RETURNS_DEEP_STUBS);
+        KubernetesClient client = mock(KubernetesClient.class);
         VersityS3Provider provider = mock(VersityS3Provider.class);
         S3User user = user("alice", "backend", null);
         S3Bucket bucket = new S3Bucket();
@@ -156,7 +162,7 @@ class S3UserReconcilerTest {
 
     @Test
     void cleanupDeletesProviderUserUsingStatusFallback() {
-        KubernetesClient client = mock(KubernetesClient.class, RETURNS_DEEP_STUBS);
+        KubernetesClient client = mock(KubernetesClient.class);
         VersityS3Provider provider = mock(VersityS3Provider.class);
         S3User user = user("alice", "backend", null);
         S3UserStatus status = new S3UserStatus();
@@ -165,9 +171,10 @@ class S3UserReconcilerTest {
         stubResourceList(client, S3Bucket.class, List.of());
         when(provider.type()).thenReturn("versity");
         stubResourceGet(client, S3Backend.class, "backend", backend());
-        when(client.secrets().inNamespace(NS).withName("admin").get())
-                .thenReturn(secret("admin", "admin-access", "admin-secret"));
-        when(client.secrets().inNamespace(NS).withName("alice-s3").get()).thenReturn(null);
+        stubSecrets(
+                client,
+                new SecretResult("admin", secret("admin", "admin-access", "admin-secret")),
+                new SecretResult("alice-s3", null));
 
         reconciler(client, provider).cleanup(user, mock(Context.class));
 
@@ -192,8 +199,7 @@ class S3UserReconcilerTest {
             Secret credentials) {
         when(provider.type()).thenReturn("versity");
         stubResourceGet(client, S3Backend.class, "backend", backend);
-        when(client.secrets().inNamespace(NS).withName("admin").get()).thenReturn(admin);
-        when(client.secrets().inNamespace(NS).withName(credentialsName).get()).thenReturn(credentials);
+        stubSecrets(client, new SecretResult("admin", admin), new SecretResult(credentialsName, credentials));
     }
 
     @SuppressWarnings("unchecked")
@@ -218,6 +224,21 @@ class S3UserReconcilerTest {
         when(operation.inNamespace(NS)).thenReturn(namespaced);
         when(namespaced.list()).thenReturn(list);
         when(list.getItems()).thenReturn(items);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static MixedOperation<Secret, SecretList, Resource<Secret>> stubSecrets(
+            KubernetesClient client, SecretResult... results) {
+        MixedOperation<Secret, SecretList, Resource<Secret>> operation = mock(MixedOperation.class);
+        NonNamespaceOperation<Secret, SecretList, Resource<Secret>> namespaced = mock(NonNamespaceOperation.class);
+        when(client.secrets()).thenReturn(operation);
+        when(operation.inNamespace(NS)).thenReturn(namespaced);
+        for (SecretResult result : results) {
+            Resource<Secret> resource = mock(Resource.class);
+            when(namespaced.withName(result.name())).thenReturn(resource);
+            when(resource.get()).thenReturn(result.secret());
+        }
+        return operation;
     }
 
     private static S3User user(String name, String backendRef, String secretName) {
@@ -258,4 +279,6 @@ class S3UserReconcilerTest {
                 .addToStringData("secretKey", secretKey)
                 .build();
     }
+
+    private record SecretResult(String name, Secret secret) {}
 }
