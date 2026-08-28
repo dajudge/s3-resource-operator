@@ -254,3 +254,28 @@ jobs:
             exit 1
           fi
           grep -F 'Quarkus Java Operator SDK extension' <<<"$logs"
+
+  verify:
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - format
+      - unit-tests
+      - pmd
+      - spotbugs
+      - licenses
+      - helm
+      - mutation-test
+      - native-build
+
+    steps:
+      - name: Verify required checks
+        run: |
+          test "${{ needs.format.result }}" = success
+          test "${{ needs.unit-tests.result }}" = success
+          test "${{ needs.pmd.result }}" = success
+          test "${{ needs.spotbugs.result }}" = success
+          test "${{ needs.licenses.result }}" = success
+          test "${{ needs.helm.result }}" = success
+          test "${{ needs.mutation-test.result }}" = success
+          test "${{ needs.native-build.result }}" = success
