@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<checkstyle version="14.0.0">
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/main/java/com/dajudge/s3operator/reconciler/ReconcilerSupport.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/main/java/com/dajudge/s3operator/reconciler/ReconciliationException.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/main/java/com/dajudge/s3operator/reconciler/ResourceValidation.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/main/java/com/dajudge/s3operator/reconciler/S3UserReconciler.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/main/java/com/dajudge/s3operator/reconciler/S3BucketReconciler.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/main/java/com/dajudge/s3operator/reconciler/RelatedResourceEventSources.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/main/java/com/dajudge/s3operator/provider/S3ProviderException.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/main/java/com/dajudge/s3operator/provider/S3Provider.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/main/java/com/dajudge/s3operator/provider/VersityS3Provider.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/main/java/com/dajudge/s3operator/api/S3BackendStatus.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/main/java/com/dajudge/s3operator/api/S3Backend.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/main/java/com/dajudge/s3operator/api/S3BucketSpec.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/main/java/com/dajudge/s3operator/api/S3Bucket.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/main/java/com/dajudge/s3operator/api/S3BackendSpec.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/main/java/com/dajudge/s3operator/api/S3User.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/main/java/com/dajudge/s3operator/api/S3BucketStatus.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/main/java/com/dajudge/s3operator/api/S3UserStatus.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/main/java/com/dajudge/s3operator/api/S3UserSpec.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/test/java/com/dajudge/s3operator/DependencyWatchE2ETest.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/test/java/com/dajudge/s3operator/ExistingBehaviorE2ETest.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/test/java/com/dajudge/s3operator/DriftResyncE2ETest.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/test/java/com/dajudge/s3operator/VersityProviderE2ETest.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/test/java/com/dajudge/s3operator/InvalidSpecE2ETest.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/test/java/com/dajudge/s3operator/MalformedPrimaryWatchE2ETest.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/test/java/com/dajudge/s3operator/reconciler/RelatedResourceEventSourcesTest.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/test/java/com/dajudge/s3operator/reconciler/ReconcilerTestFixtures.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/test/java/com/dajudge/s3operator/reconciler/ReconcilerSupportTestCleanupDependencies.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/test/java/com/dajudge/s3operator/reconciler/ReconcilerSupportTest.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/test/java/com/dajudge/s3operator/reconciler/S3UserReconcilerTest.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/test/java/com/dajudge/s3operator/reconciler/S3BucketReconcilerTest.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/test/java/com/dajudge/s3operator/reconciler/Fabric8TestMocks.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/test/java/com/dajudge/s3operator/reconciler/ResourceValidationTest.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/test/java/com/dajudge/s3operator/OperatorE2ETestSupport.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/test/java/com/dajudge/s3operator/K3sVersityTestResource.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/test/java/com/dajudge/s3operator/LongTimersTestProfile.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/test/java/com/dajudge/s3operator/NativeOperatorIT.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/test/java/com/dajudge/s3operator/FailureStatusE2ETest.java">
+</file>
+<file name="/home/runner/work/s3-resource-operator/s3-resource-operator/src/test/java/com/dajudge/s3operator/OperatorE2ETest.java">
+</file>
+</checkstyle>

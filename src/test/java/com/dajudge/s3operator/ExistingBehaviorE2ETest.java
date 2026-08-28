@@ -30,7 +30,7 @@ import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 @QuarkusTest
-@QuarkusTestResource(KindVersityTestResource.class)
+@QuarkusTestResource(K3sVersityTestResource.class)
 class ExistingBehaviorE2ETest extends OperatorE2ETestSupport {
 
     @Test
