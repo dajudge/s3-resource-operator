@@ -1,49 +1,74 @@
 package com.dajudge.s3operator.reconciler;
 
-import com.dajudge.s3operator.api.S3Backend;
-import com.dajudge.s3operator.provider.VersityS3Provider;
-import io.fabric8.kubernetes.api.model.Condition;
-import io.fabric8.kubernetes.api.model.Secret;
-import io.fabric8.kubernetes.client.KubernetesClient;
-
-import java.nio.charset.StandardCharsets;
-import java.time.Instant;
-import java.util.Base64;
-import java.util.List;
-
 import static com.dajudge.s3operator.reconciler.ReconciliationException.Reason.ADMIN_CREDENTIALS_NOT_FOUND;
 import static com.dajudge.s3operator.reconciler.ReconciliationException.Reason.BACKEND_NOT_FOUND;
 import static com.dajudge.s3operator.reconciler.ReconciliationException.Reason.INVALID_CREDENTIALS_SECRET;
 import static com.dajudge.s3operator.reconciler.ReconciliationException.Reason.UNSUPPORTED_PROVIDER;
 
+import com.dajudge.s3operator.api.S3Backend;
+import com.dajudge.s3operator.provider.VersityS3Provider;
+import io.fabric8.kubernetes.api.model.Condition;
+import io.fabric8.kubernetes.api.model.ConditionBuilder;
+import io.fabric8.kubernetes.api.model.Secret;
+import io.fabric8.kubernetes.client.KubernetesClient;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.Base64;
+import java.util.List;
+
 final class ReconcilerSupport {
     private ReconcilerSupport() {}
 
-    static S3Backend requireBackend(KubernetesClient client, VersityS3Provider provider, String namespace, String name) {
-        S3Backend backend = client.resources(S3Backend.class).inNamespace(namespace).withName(name).get();
+    static S3Backend requireBackend(
+            KubernetesClient client, VersityS3Provider provider, String namespace, String name) {
+        S3Backend backend = client.resources(S3Backend.class)
+                .inNamespace(namespace)
+                .withName(name)
+                .get();
         if (backend == null) throw new ReconciliationException(BACKEND_NOT_FOUND, "S3Backend not found: " + name);
         ResourceValidation.validateBackend(backend);
         if (!provider.type().equals(backend.getSpec().getProvider())) {
-            throw new ReconciliationException(UNSUPPORTED_PROVIDER,
+            throw new ReconciliationException(
+                    UNSUPPORTED_PROVIDER,
                     "Unsupported S3 provider: " + backend.getSpec().getProvider());
         }
         return backend;
     }
 
     static Secret requireAdminSecret(KubernetesClient client, String namespace, S3Backend backend) {
-        Secret secret = client.secrets().inNamespace(namespace)
-                .withName(backend.getSpec().getAdminCredentialsSecretRef().getName()).get();
+        Secret secret = client.secrets()
+                .inNamespace(namespace)
+                .withName(backend.getSpec().getAdminCredentialsSecretRef().getName())
+                .get();
         if (secret == null) {
             throw new ReconciliationException(ADMIN_CREDENTIALS_NOT_FOUND, "Admin credentials Secret not found");
         }
         return secret;
     }
 
+    static Condition readyCondition(
+            long generation, List<Condition> conditions, String status, String reason, String message) {
+        return new ConditionBuilder()
+                .withType("Ready")
+                .withStatus(status)
+                .withReason(reason)
+                .withMessage(message == null ? reason : message)
+                .withObservedGeneration(generation)
+                .withLastTransitionTime(transitionTime(conditions, status, reason))
+                .build();
+    }
+
+    static String defaultedName(String configured, String fallback) {
+        return configured == null || configured.isBlank() ? fallback : configured;
+    }
+
     static String transitionTime(List<Condition> conditions, String status, String reason) {
         if (conditions != null) {
             for (Condition condition : conditions) {
-                if ("Ready".equals(condition.getType()) && status.equals(condition.getStatus())
-                        && reason.equals(condition.getReason()) && condition.getLastTransitionTime() != null) {
+                if ("Ready".equals(condition.getType())
+                        && status.equals(condition.getStatus())
+                        && reason.equals(condition.getReason())
+                        && condition.getLastTransitionTime() != null) {
                     return condition.getLastTransitionTime();
                 }
             }
@@ -58,7 +83,8 @@ final class ReconcilerSupport {
         if (secret.getStringData() != null && secret.getStringData().containsKey(key)) {
             return secret.getStringData().get(key);
         }
-        throw new ReconciliationException(INVALID_CREDENTIALS_SECRET,
+        throw new ReconciliationException(
+                INVALID_CREDENTIALS_SECRET,
                 "Missing key '" + key + "' in Secret " + secret.getMetadata().getName());
     }
 }

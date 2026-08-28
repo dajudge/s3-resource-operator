@@ -1,9 +1,10 @@
 package com.dajudge.s3operator.reconciler;
 
+import static com.dajudge.s3operator.reconciler.ReconcilerSupport.defaultedName;
+import static com.dajudge.s3operator.reconciler.ReconcilerSupport.readyCondition;
 import static com.dajudge.s3operator.reconciler.ReconcilerSupport.requireAdminSecret;
 import static com.dajudge.s3operator.reconciler.ReconcilerSupport.requireBackend;
 import static com.dajudge.s3operator.reconciler.ReconcilerSupport.secretValue;
-import static com.dajudge.s3operator.reconciler.ReconcilerSupport.transitionTime;
 import static com.dajudge.s3operator.reconciler.ReconciliationException.Reason.PROVIDER_ERROR;
 import static com.dajudge.s3operator.reconciler.ReconciliationException.Reason.USER_CREDENTIALS_NOT_FOUND;
 import static com.dajudge.s3operator.reconciler.ReconciliationException.Reason.USER_NOT_FOUND;
@@ -15,7 +16,6 @@ import com.dajudge.s3operator.api.S3BucketStatus;
 import com.dajudge.s3operator.api.S3User;
 import com.dajudge.s3operator.provider.S3ProviderException;
 import com.dajudge.s3operator.provider.VersityS3Provider;
-import io.fabric8.kubernetes.api.model.ConditionBuilder;
 import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.javaoperatorsdk.operator.api.reconciler.Cleaner;
@@ -137,29 +137,18 @@ public class S3BucketReconciler implements Reconciler<S3Bucket>, Cleaner<S3Bucke
 
     private static void setCondition(
             S3Bucket bucket, S3BucketStatus status, String value, String reason, String message) {
-        status.setObservedGeneration(bucket.getMetadata().getGeneration());
-        status.setConditions(List.of(new ConditionBuilder()
-                .withType("Ready")
-                .withStatus(value)
-                .withReason(reason)
-                .withMessage(message == null ? reason : message)
-                .withObservedGeneration(bucket.getMetadata().getGeneration())
-                .withLastTransitionTime(transitionTime(status.getConditions(), value, reason))
-                .build()));
+        long generation = bucket.getMetadata().getGeneration();
+        status.setObservedGeneration(generation);
+        status.setConditions(List.of(readyCondition(generation, status.getConditions(), value, reason, message)));
         bucket.setStatus(status);
     }
 
     private static String userSecretName(S3User user) {
-        return user.getSpec().getSecretName() == null
-                        || user.getSpec().getSecretName().isBlank()
-                ? user.getMetadata().getName() + "-s3"
-                : user.getSpec().getSecretName();
+        return defaultedName(user.getSpec().getSecretName(), user.getMetadata().getName() + "-s3");
     }
 
     private static String bucketName(S3Bucket bucket) {
-        return bucket.getSpec().getBucketName() == null
-                        || bucket.getSpec().getBucketName().isBlank()
-                ? bucket.getMetadata().getName()
-                : bucket.getSpec().getBucketName();
+        return defaultedName(
+                bucket.getSpec().getBucketName(), bucket.getMetadata().getName());
     }
 }

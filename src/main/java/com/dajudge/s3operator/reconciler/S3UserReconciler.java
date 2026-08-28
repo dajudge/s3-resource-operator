@@ -1,9 +1,10 @@
 package com.dajudge.s3operator.reconciler;
 
+import static com.dajudge.s3operator.reconciler.ReconcilerSupport.defaultedName;
+import static com.dajudge.s3operator.reconciler.ReconcilerSupport.readyCondition;
 import static com.dajudge.s3operator.reconciler.ReconcilerSupport.requireAdminSecret;
 import static com.dajudge.s3operator.reconciler.ReconcilerSupport.requireBackend;
 import static com.dajudge.s3operator.reconciler.ReconcilerSupport.secretValue;
-import static com.dajudge.s3operator.reconciler.ReconcilerSupport.transitionTime;
 import static com.dajudge.s3operator.reconciler.ReconciliationException.Reason.PROVIDER_ERROR;
 
 import com.dajudge.s3operator.api.S3Backend;
@@ -12,7 +13,6 @@ import com.dajudge.s3operator.api.S3User;
 import com.dajudge.s3operator.api.S3UserStatus;
 import com.dajudge.s3operator.provider.S3ProviderException;
 import com.dajudge.s3operator.provider.VersityS3Provider;
-import io.fabric8.kubernetes.api.model.ConditionBuilder;
 import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.api.model.SecretBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
@@ -160,23 +160,14 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
     }
 
     private static void setCondition(S3User user, S3UserStatus status, String value, String reason, String message) {
-        status.setObservedGeneration(user.getMetadata().getGeneration());
-        status.setConditions(List.of(new ConditionBuilder()
-                .withType("Ready")
-                .withStatus(value)
-                .withReason(reason)
-                .withMessage(message == null ? reason : message)
-                .withObservedGeneration(user.getMetadata().getGeneration())
-                .withLastTransitionTime(transitionTime(status.getConditions(), value, reason))
-                .build()));
+        long generation = user.getMetadata().getGeneration();
+        status.setObservedGeneration(generation);
+        status.setConditions(List.of(readyCondition(generation, status.getConditions(), value, reason, message)));
         user.setStatus(status);
     }
 
     private static String secretName(S3User user) {
-        return user.getSpec().getSecretName() == null
-                        || user.getSpec().getSecretName().isBlank()
-                ? user.getMetadata().getName() + "-s3"
-                : user.getSpec().getSecretName();
+        return defaultedName(user.getSpec().getSecretName(), user.getMetadata().getName() + "-s3");
     }
 
     private static String randomSecret() {
