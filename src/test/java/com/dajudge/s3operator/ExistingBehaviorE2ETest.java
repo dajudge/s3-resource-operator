@@ -60,7 +60,10 @@ class ExistingBehaviorE2ETest extends OperatorE2ETestSupport {
         try (S3Client s3 = s3(secretValue(secret, "accessKey"), secretValue(secret, "secretKey"))) {
             awaitAccessible(s3, "defaults-bucket");
         }
-        client.resources(S3Bucket.class).inNamespace(NS).withName("defaults-bucket").delete();
+        client.resources(S3Bucket.class)
+                .inNamespace(NS)
+                .withName("defaults-bucket")
+                .delete();
         awaitDeleted(S3Bucket.class, "defaults-bucket");
         try (S3Client s3 = s3(secretValue(secret, "accessKey"), secretValue(secret, "secretKey"))) {
             awaitAccessible(s3, "defaults-bucket");
@@ -89,7 +92,8 @@ class ExistingBehaviorE2ETest extends OperatorE2ETestSupport {
                 "secret-life-bucket",
                 S3BucketSpec.DeletionPolicy.RETAIN);
         awaitBucket("secret-life-bucket", "True", "Reconciled");
-        try (S3Client current = s3(access, replacementSecret); S3Client stale = s3(access, originalSecret)) {
+        try (S3Client current = s3(access, replacementSecret);
+                S3Client stale = s3(access, originalSecret)) {
             awaitAccessible(current, "secret-life-bucket");
             awaitRejected(stale, "secret-life-bucket");
         }
@@ -98,13 +102,13 @@ class ExistingBehaviorE2ETest extends OperatorE2ETestSupport {
             secret.getData()
                     .put(
                             "secretKey",
-                            Base64.getEncoder()
-                                    .encodeToString(manuallyRotated.getBytes(StandardCharsets.UTF_8)));
+                            Base64.getEncoder().encodeToString(manuallyRotated.getBytes(StandardCharsets.UTF_8)));
             return secret;
         });
         forceUserReconcile("secret-life-user", "user");
         awaitUser("secret-life-user", "True", "Reconciled");
-        try (S3Client current = s3(access, manuallyRotated); S3Client stale = s3(access, replacementSecret)) {
+        try (S3Client current = s3(access, manuallyRotated);
+                S3Client stale = s3(access, replacementSecret)) {
             awaitAccessible(current, "secret-life-bucket");
             awaitRejected(stale, "secret-life-bucket");
         }
@@ -127,7 +131,10 @@ class ExistingBehaviorE2ETest extends OperatorE2ETestSupport {
         awaitBucket("cleanup-bucket", "True", "Reconciled");
         VersityS3Provider provider = new VersityS3Provider();
         provider.deleteBucket(endpoint, ROOT_ACCESS, ROOT_SECRET, "cleanup-bucket");
-        client.resources(S3Bucket.class).inNamespace(NS).withName("cleanup-bucket").delete();
+        client.resources(S3Bucket.class)
+                .inNamespace(NS)
+                .withName("cleanup-bucket")
+                .delete();
         awaitDeleted(S3Bucket.class, "cleanup-bucket");
         provider.deleteUser(endpoint, ROOT_ACCESS, ROOT_SECRET, access);
         client.resources(S3User.class).inNamespace(NS).withName("cleanup-user").delete();
@@ -151,17 +158,28 @@ class ExistingBehaviorE2ETest extends OperatorE2ETestSupport {
         awaitBucket("nonempty-bucket", "True", "Reconciled");
         try (S3Client s3 = s3(secretValue(credentials, "accessKey"), secretValue(credentials, "secretKey"))) {
             s3.putObject(
-                    PutObjectRequest.builder().bucket("nonempty-bucket").key("data.txt").build(),
+                    PutObjectRequest.builder()
+                            .bucket("nonempty-bucket")
+                            .key("data.txt")
+                            .build(),
                     RequestBody.fromString("keep me", StandardCharsets.UTF_8));
-            client.resources(S3Bucket.class).inNamespace(NS).withName("nonempty-bucket").delete();
+            client.resources(S3Bucket.class)
+                    .inNamespace(NS)
+                    .withName("nonempty-bucket")
+                    .delete();
             await().during(Duration.ofSeconds(2)).atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
-                S3Bucket terminating =
-                        client.resources(S3Bucket.class).inNamespace(NS).withName("nonempty-bucket").get();
+                S3Bucket terminating = client.resources(S3Bucket.class)
+                        .inNamespace(NS)
+                        .withName("nonempty-bucket")
+                        .get();
                 assertThat(terminating).isNotNull();
                 assertThat(terminating.getMetadata().getDeletionTimestamp()).isNotNull();
                 assertThat(terminating.getMetadata().getFinalizers()).isNotEmpty();
             });
-            s3.deleteObject(DeleteObjectRequest.builder().bucket("nonempty-bucket").key("data.txt").build());
+            s3.deleteObject(DeleteObjectRequest.builder()
+                    .bucket("nonempty-bucket")
+                    .key("data.txt")
+                    .build());
         }
         awaitDeleted(S3Bucket.class, "nonempty-bucket");
     }
@@ -202,8 +220,7 @@ class ExistingBehaviorE2ETest extends OperatorE2ETestSupport {
         String buckets = Files.readString(Path.of("target/kubernetes/s3buckets.s3.dajudge.com-v1.yml"));
         String users = Files.readString(Path.of("target/kubernetes/s3users.s3.dajudge.com-v1.yml"));
         String backends = Files.readString(Path.of("target/kubernetes/s3backends.s3.dajudge.com-v1.yml"));
-        assertThat(buckets)
-                .contains("kind: \"S3Bucket\"", "plural: \"s3buckets\"", "\"RETAIN\"", "\"DELETE\"");
+        assertThat(buckets).contains("kind: \"S3Bucket\"", "plural: \"s3buckets\"", "\"RETAIN\"", "\"DELETE\"");
         assertThat(users).contains("kind: \"S3User\"", "plural: \"s3users\"");
         assertThat(backends).contains("kind: \"S3Backend\"", "plural: \"s3backends\"");
     }
@@ -220,7 +237,10 @@ class ExistingBehaviorE2ETest extends OperatorE2ETestSupport {
                   adminCredentialsSecretRef:
                     name: raw-missing-admin
                 """);
-        S3Backend backend = client.resources(S3Backend.class).inNamespace(NS).withName("raw-default-backend").get();
+        S3Backend backend = client.resources(S3Backend.class)
+                .inNamespace(NS)
+                .withName("raw-default-backend")
+                .get();
         assertThat(backend.getSpec().getProvider()).isEqualTo("versity");
         createRaw("""
                 apiVersion: s3.dajudge.com/v1alpha1
@@ -230,7 +250,10 @@ class ExistingBehaviorE2ETest extends OperatorE2ETestSupport {
                 spec:
                   backendRef: raw-default-backend
                 """);
-        S3User user = client.resources(S3User.class).inNamespace(NS).withName("raw-default-user").get();
+        S3User user = client.resources(S3User.class)
+                .inNamespace(NS)
+                .withName("raw-default-user")
+                .get();
         assertThat(user.getSpec().getRole()).isEqualTo("user");
         assertThat(user.getSpec().getSecretName()).isNull();
         createRaw("""
@@ -242,7 +265,10 @@ class ExistingBehaviorE2ETest extends OperatorE2ETestSupport {
                   backendRef: raw-default-backend
                   userRef: raw-default-user
                 """);
-        S3Bucket bucket = client.resources(S3Bucket.class).inNamespace(NS).withName("raw-default-bucket").get();
+        S3Bucket bucket = client.resources(S3Bucket.class)
+                .inNamespace(NS)
+                .withName("raw-default-bucket")
+                .get();
         assertThat(bucket.getSpec().getDeletionPolicy()).isEqualTo(S3BucketSpec.DeletionPolicy.RETAIN);
         assertThat(bucket.getSpec().getBucketName()).isNull();
         assertThatThrownBy(() -> createRaw("""
@@ -254,37 +280,39 @@ class ExistingBehaviorE2ETest extends OperatorE2ETestSupport {
                           backendRef: raw-default-backend
                           userRef: raw-default-user
                           deletionPolicy: DESTROY_EVERYTHING
-                        """))
-                .isInstanceOf(KubernetesClientException.class);
+                        """)).isInstanceOf(KubernetesClientException.class);
     }
 
     private void createRaw(String yaml) {
-        client.load(new ByteArrayInputStream(yaml.getBytes(StandardCharsets.UTF_8))).inNamespace(NS).create();
+        client.load(new ByteArrayInputStream(yaml.getBytes(StandardCharsets.UTF_8)))
+                .inNamespace(NS)
+                .create();
     }
 
     private void createBucket(
-            String name,
-            String backendRef,
-            String userRef,
-            String bucketName,
-            S3BucketSpec.DeletionPolicy policy) {
+            String name, String backendRef, String userRef, String bucketName, S3BucketSpec.DeletionPolicy policy) {
         S3BucketSpec spec = new S3BucketSpec();
         spec.setBackendRef(backendRef);
         spec.setUserRef(userRef);
         if (bucketName != null) spec.setBucketName(bucketName);
         if (policy != null) spec.setDeletionPolicy(policy);
         S3Bucket bucket = new S3Bucket();
-        bucket.setMetadata(new ObjectMetaBuilder().withName(name).withNamespace(NS).build());
+        bucket.setMetadata(
+                new ObjectMetaBuilder().withName(name).withNamespace(NS).build());
         bucket.setSpec(spec);
         client.resources(S3Bucket.class).inNamespace(NS).resource(bucket).create();
     }
 
     private void forceUserReconcile(String name, String role) {
-        await().atMost(TIMEOUT).ignoreException(KubernetesClientException.class).untilAsserted(() ->
-                client.resources(S3User.class).inNamespace(NS).withName(name).edit(user -> {
-                    user.getSpec().setRole(role);
-                    return user;
-                }));
+        await().atMost(TIMEOUT)
+                .ignoreException(KubernetesClientException.class)
+                .untilAsserted(() -> client.resources(S3User.class)
+                        .inNamespace(NS)
+                        .withName(name)
+                        .edit(user -> {
+                            user.getSpec().setRole(role);
+                            return user;
+                        }));
     }
 
     private static Condition readyCondition(S3User user) {

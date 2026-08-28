@@ -41,8 +41,11 @@ abstract class OperatorE2ETestSupport {
     protected static final String ROOT_SECRET = "test-root-secret";
     protected static final Duration TIMEOUT = Duration.ofSeconds(30);
 
-    @Inject KubernetesClient client;
-    @ConfigProperty(name = "test.s3.endpoint") String endpoint;
+    @Inject
+    KubernetesClient client;
+
+    @ConfigProperty(name = "test.s3.endpoint")
+    String endpoint;
 
     protected void createAdminSecret(String name) {
         client.secrets()
@@ -64,7 +67,8 @@ abstract class OperatorE2ETestSupport {
         spec.setEndpoint(endpoint);
         spec.setAdminCredentialsSecretRef(ref);
         S3Backend backend = new S3Backend();
-        backend.setMetadata(new ObjectMetaBuilder().withName(name).withNamespace(NS).build());
+        backend.setMetadata(
+                new ObjectMetaBuilder().withName(name).withNamespace(NS).build());
         backend.setSpec(spec);
         client.resources(S3Backend.class).inNamespace(NS).resource(backend).create();
     }
@@ -73,7 +77,8 @@ abstract class OperatorE2ETestSupport {
         S3UserSpec spec = new S3UserSpec();
         spec.setBackendRef(backendRef);
         S3User user = new S3User();
-        user.setMetadata(new ObjectMetaBuilder().withName(name).withNamespace(NS).build());
+        user.setMetadata(
+                new ObjectMetaBuilder().withName(name).withNamespace(NS).build());
         user.setSpec(spec);
         client.resources(S3User.class).inNamespace(NS).resource(user).create();
     }
@@ -83,7 +88,8 @@ abstract class OperatorE2ETestSupport {
         spec.setBackendRef(backendRef);
         spec.setUserRef(userRef);
         S3Bucket bucket = new S3Bucket();
-        bucket.setMetadata(new ObjectMetaBuilder().withName(name).withNamespace(NS).build());
+        bucket.setMetadata(
+                new ObjectMetaBuilder().withName(name).withNamespace(NS).build());
         bucket.setSpec(spec);
         client.resources(S3Bucket.class).inNamespace(NS).resource(bucket).create();
     }
@@ -94,7 +100,10 @@ abstract class OperatorE2ETestSupport {
 
     protected S3User awaitUser(String name, String status, String reason, Duration timeout) {
         return awaitReady(
-                () -> client.resources(S3User.class).inNamespace(NS).withName(name).get(),
+                () -> client.resources(S3User.class)
+                        .inNamespace(NS)
+                        .withName(name)
+                        .get(),
                 user -> user.getStatus() == null ? null : user.getStatus().getConditions(),
                 status,
                 reason,
@@ -107,7 +116,10 @@ abstract class OperatorE2ETestSupport {
 
     protected S3Bucket awaitBucket(String name, String status, String reason, Duration timeout) {
         return awaitReady(
-                () -> client.resources(S3Bucket.class).inNamespace(NS).withName(name).get(),
+                () -> client.resources(S3Bucket.class)
+                        .inNamespace(NS)
+                        .withName(name)
+                        .get(),
                 bucket -> bucket.getStatus() == null ? null : bucket.getStatus().getConditions(),
                 status,
                 reason,
@@ -129,8 +141,12 @@ abstract class OperatorE2ETestSupport {
     }
 
     protected <T extends HasMetadata> void awaitDeleted(Class<T> type, String name) {
-        await().atMost(TIMEOUT).untilAsserted(
-                () -> assertThat(client.resources(type).inNamespace(NS).withName(name).get()).isNull());
+        await().atMost(TIMEOUT)
+                .untilAsserted(() -> assertThat(client.resources(type)
+                                .inNamespace(NS)
+                                .withName(name)
+                                .get())
+                        .isNull());
     }
 
     protected S3Client s3(String accessKey, String secretKey) {
@@ -138,18 +154,22 @@ abstract class OperatorE2ETestSupport {
                 .endpointOverride(URI.create(endpoint))
                 .region(Region.US_EAST_1)
                 .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)))
-                .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
+                .serviceConfiguration(
+                        S3Configuration.builder().pathStyleAccessEnabled(true).build())
                 .httpClientBuilder(UrlConnectionHttpClient.builder())
                 .build();
     }
 
     protected static void awaitAccessible(S3Client s3, String bucket) {
-        await().atMost(TIMEOUT).ignoreExceptions().untilAsserted(
-                () -> s3.headBucket(HeadBucketRequest.builder().bucket(bucket).build()));
+        await().atMost(TIMEOUT)
+                .ignoreExceptions()
+                .untilAsserted(() ->
+                        s3.headBucket(HeadBucketRequest.builder().bucket(bucket).build()));
     }
 
     protected static void awaitRejected(S3Client s3, String bucket) {
-        await().atMost(TIMEOUT).untilAsserted(() -> assertThat(credentialsRejected(s3, bucket)).isTrue());
+        await().atMost(TIMEOUT)
+                .untilAsserted(() -> assertThat(credentialsRejected(s3, bucket)).isTrue());
     }
 
     private <T extends HasMetadata> T awaitReady(
