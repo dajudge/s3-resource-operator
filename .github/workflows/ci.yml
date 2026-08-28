@@ -29,7 +29,15 @@ jobs:
           cache: maven
 
       - name: Verify
-        run: mvn --batch-mode --no-transfer-progress verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            mvn --batch-mode --no-transfer-progress verify \
+              -Dspotless.ratchetFrom="${{ github.event.before }}"
+          else
+            mvn --batch-mode --no-transfer-progress verify
+          fi
 
       - name: Verify runtime dependency licenses
         run: bash hack/check-third-party-licenses.sh
