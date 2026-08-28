@@ -1,5 +1,13 @@
 package com.dajudge.s3operator.reconciler;
 
+import static com.dajudge.s3operator.reconciler.ReconciliationException.Reason.PROVIDER_ERROR;
+import static com.dajudge.s3operator.reconciler.ReconcilerSupport.defaultedName;
+import static com.dajudge.s3operator.reconciler.ReconcilerSupport.requireAdminSecret;
+import static com.dajudge.s3operator.reconciler.ReconcilerSupport.requireBackend;
+import static com.dajudge.s3operator.reconciler.ReconcilerSupport.sameNamespace;
+import static com.dajudge.s3operator.reconciler.ReconcilerSupport.secretValue;
+import static com.dajudge.s3operator.reconciler.ReconcilerSupport.transitionTime;
+
 import com.dajudge.s3operator.api.S3Backend;
 import com.dajudge.s3operator.api.S3Bucket;
 import com.dajudge.s3operator.api.S3User;
@@ -20,20 +28,11 @@ import io.javaoperatorsdk.operator.api.reconciler.UpdateControl;
 import io.javaoperatorsdk.operator.processing.event.source.EventSource;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
-
-import static com.dajudge.s3operator.reconciler.ReconciliationException.Reason.PROVIDER_ERROR;
-import static com.dajudge.s3operator.reconciler.ReconcilerSupport.defaultedName;
-import static com.dajudge.s3operator.reconciler.ReconcilerSupport.requireAdminSecret;
-import static com.dajudge.s3operator.reconciler.ReconcilerSupport.requireBackend;
-import static com.dajudge.s3operator.reconciler.ReconcilerSupport.sameNamespace;
-import static com.dajudge.s3operator.reconciler.ReconcilerSupport.secretValue;
-import static com.dajudge.s3operator.reconciler.ReconcilerSupport.transitionTime;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @ApplicationScoped
 @ControllerConfiguration
@@ -56,20 +55,36 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
             if (credentials == null) {
                 String accessKey = namespace + "." + user.getMetadata().getName();
                 String secretKey = randomSecret();
-                credentials = client.secrets().resource(new SecretBuilder()
-                        .withNewMetadata().withName(secretName).withNamespace(namespace)
-                        .addNewOwnerReference().withApiVersion(user.getApiVersion()).withKind(user.getKind())
-                        .withName(user.getMetadata().getName()).withUid(user.getMetadata().getUid())
-                        .withController(true).withBlockOwnerDeletion(true).endOwnerReference().endMetadata()
-                        .addToStringData("accessKey", accessKey).addToStringData("secretKey", secretKey)
-                        .addToStringData("endpoint", backend.getSpec().getEndpoint()).build()).create();
+                credentials = client.secrets()
+                        .resource(new SecretBuilder()
+                                .withNewMetadata()
+                                .withName(secretName)
+                                .withNamespace(namespace)
+                                .addNewOwnerReference()
+                                .withApiVersion(user.getApiVersion())
+                                .withKind(user.getKind())
+                                .withName(user.getMetadata().getName())
+                                .withUid(user.getMetadata().getUid())
+                                .withController(true)
+                                .withBlockOwnerDeletion(true)
+                                .endOwnerReference()
+                                .endMetadata()
+                                .addToStringData("accessKey", accessKey)
+                                .addToStringData("secretKey", secretKey)
+                                .addToStringData("endpoint", backend.getSpec().getEndpoint())
+                                .build())
+                        .create();
             }
 
             String accessKey = secretValue(credentials, "accessKey");
             try {
-                provider.createUser(backend.getSpec().getEndpoint(),
-                        secretValue(adminSecret, "accessKey"), secretValue(adminSecret, "secretKey"),
-                        accessKey, secretValue(credentials, "secretKey"), user.getSpec().getRole());
+                provider.createUser(
+                        backend.getSpec().getEndpoint(),
+                        secretValue(adminSecret, "accessKey"),
+                        secretValue(adminSecret, "secretKey"),
+                        accessKey,
+                        secretValue(credentials, "secretKey"),
+                        user.getSpec().getRole());
             } catch (S3ProviderException e) {
                 throw new ReconciliationException(PROVIDER_ERROR, e.getMessage(), e);
             }
@@ -88,12 +103,21 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
 
     @Override
     public List<EventSource<?, S3User>> prepareEventSources(EventSourceContext<S3User> context) {
-        var backends = RelatedResourceEventSources.informer(S3Backend.class, S3User.class, context,
-                backend -> RelatedResourceEventSources.matching(context, user -> ResourceValidation.hasUsableUserSpec(user)
-                        && sameNamespace(user, backend)
-                        && backend.getMetadata().getName().equals(user.getSpec().getBackendRef())));
-        var secrets = RelatedResourceEventSources.informer(Secret.class, S3User.class, context,
-                secret -> RelatedResourceEventSources.matching(context,
+        var backends = RelatedResourceEventSources.informer(
+                S3Backend.class,
+                S3User.class,
+                context,
+                backend -> RelatedResourceEventSources.matching(
+                        context,
+                        user -> ResourceValidation.hasUsableUserSpec(user)
+                                && sameNamespace(user, backend)
+                                && backend.getMetadata().getName().equals(user.getSpec().getBackendRef())));
+        var secrets = RelatedResourceEventSources.informer(
+                Secret.class,
+                S3User.class,
+                context,
+                secret -> RelatedResourceEventSources.matching(
+                        context,
                         user -> ResourceValidation.hasUsableUserSpec(user) && secretAffectsUser(secret, user)));
         return List.of(backends, secrets);
     }
@@ -101,7 +125,11 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
     @Override
     public DeleteControl cleanup(S3User user, Context<S3User> context) {
         String namespace = user.getMetadata().getNamespace();
-        boolean referenced = client.resources(S3Bucket.class).inNamespace(namespace).list().getItems().stream()
+        boolean referenced = client.resources(S3Bucket.class)
+                .inNamespace(namespace)
+                .list()
+                .getItems()
+                .stream()
                 .anyMatch(bucket -> bucket.getSpec() != null
                         && user.getMetadata().getName().equals(bucket.getSpec().getUserRef()));
         if (referenced) {
@@ -109,22 +137,30 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
         }
 
         if (!ResourceValidation.hasUsableUserSpec(user)) return DeleteControl.defaultDelete();
-        S3Backend backend = client.resources(S3Backend.class).inNamespace(namespace)
-                .withName(user.getSpec().getBackendRef()).get();
+        S3Backend backend = client.resources(S3Backend.class)
+                .inNamespace(namespace)
+                .withName(user.getSpec().getBackendRef())
+                .get();
         if (!ResourceValidation.hasUsableBackendSpec(backend)
                 || !provider.type().equals(backend.getSpec().getProvider())) return DeleteControl.defaultDelete();
 
-        Secret adminSecret = client.secrets().inNamespace(namespace)
-                .withName(backend.getSpec().getAdminCredentialsSecretRef().getName()).get();
+        Secret adminSecret = client.secrets()
+                .inNamespace(namespace)
+                .withName(backend.getSpec().getAdminCredentialsSecretRef().getName())
+                .get();
         if (adminSecret == null) return DeleteControl.defaultDelete();
 
         String credentialsName = defaultedName(user.getSpec().getSecretName(), user.getMetadata().getName() + "-s3");
         Secret credentials = client.secrets().inNamespace(namespace).withName(credentialsName).get();
-        String accessKey = credentials != null ? secretValue(credentials, "accessKey")
+        String accessKey = credentials != null
+                ? secretValue(credentials, "accessKey")
                 : user.getStatus() == null ? null : user.getStatus().getAccessKeyId();
         if (accessKey != null && !accessKey.isBlank()) {
-            provider.deleteUser(backend.getSpec().getEndpoint(), secretValue(adminSecret, "accessKey"),
-                    secretValue(adminSecret, "secretKey"), accessKey);
+            provider.deleteUser(
+                    backend.getSpec().getEndpoint(),
+                    secretValue(adminSecret, "accessKey"),
+                    secretValue(adminSecret, "secretKey"),
+                    accessKey);
         }
         return DeleteControl.defaultDelete();
     }
@@ -133,8 +169,10 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
         if (!sameNamespace(user, secret)) return false;
         String credentialsName = defaultedName(user.getSpec().getSecretName(), user.getMetadata().getName() + "-s3");
         if (secret.getMetadata().getName().equals(credentialsName)) return true;
-        S3Backend backend = client.resources(S3Backend.class).inNamespace(user.getMetadata().getNamespace())
-                .withName(user.getSpec().getBackendRef()).get();
+        S3Backend backend = client.resources(S3Backend.class)
+                .inNamespace(user.getMetadata().getNamespace())
+                .withName(user.getSpec().getBackendRef())
+                .get();
         return ResourceValidation.hasUsableBackendSpec(backend)
                 && secret.getMetadata().getName().equals(backend.getSpec().getAdminCredentialsSecretRef().getName());
     }
@@ -145,9 +183,14 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
 
     private static void setCondition(S3User user, S3UserStatus status, String value, String reason, String message) {
         status.setObservedGeneration(user.getMetadata().getGeneration());
-        status.setConditions(List.of(new ConditionBuilder().withType("Ready").withStatus(value).withReason(reason)
-                .withMessage(message == null ? reason : message).withObservedGeneration(user.getMetadata().getGeneration())
-                .withLastTransitionTime(transitionTime(status.getConditions(), value, reason)).build()));
+        status.setConditions(List.of(new ConditionBuilder()
+                .withType("Ready")
+                .withStatus(value)
+                .withReason(reason)
+                .withMessage(message == null ? reason : message)
+                .withObservedGeneration(user.getMetadata().getGeneration())
+                .withLastTransitionTime(transitionTime(status.getConditions(), value, reason))
+                .build()));
         user.setStatus(status);
     }
 
