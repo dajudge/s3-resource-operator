@@ -7,6 +7,7 @@ import com.dajudge.s3operator.api.S3BucketSpec;
 import com.dajudge.s3operator.api.S3User;
 import com.dajudge.s3operator.api.S3UserSpec;
 import io.fabric8.kubernetes.api.model.HasMetadata;
+import io.fabric8.kubernetes.api.model.LocalObjectReference;
 import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
 import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.api.model.SecretBuilder;
@@ -42,25 +43,20 @@ class OperatorE2ETest {
     private static final String NAMESPACE = "default";
     private static final Duration TIMEOUT = Duration.ofSeconds(30);
 
-    @Inject
-    KubernetesClient client;
-
-    @ConfigProperty(name = "test.s3.endpoint")
-    String endpoint;
+    @Inject KubernetesClient client;
+    @ConfigProperty(name = "test.s3.endpoint") String endpoint;
 
     @Test
     void reconcilesResourcesAndEnforcesLifecycleSemantics() {
         createAdminSecret();
         createBackend("home", "versity-admin");
         createBackend("backend-to-delete", "versity-admin");
-
         createUser("e2e-user", "home");
         Secret credentials = awaitSecret("e2e-user-s3");
         String accessKey = secretValue(credentials, "accessKey");
         String secretKey = secretValue(credentials, "secretKey");
         S3User readyUser = awaitUserReady("e2e-user");
         String originalUserTransition = readyUser.getStatus().getConditions().getFirst().getLastTransitionTime();
-
         createBucket("e2e-bucket", "home", "e2e-user", S3BucketSpec.DeletionPolicy.RETAIN);
         createBucket("delete-me", "home", "e2e-user", S3BucketSpec.DeletionPolicy.DELETE);
         S3Bucket readyBucket = awaitBucketReady("e2e-bucket");
@@ -70,42 +66,33 @@ class OperatorE2ETest {
         try (S3Client s3 = s3(accessKey, secretKey)) {
             String key = "hello.txt";
             String payload = "hello from the real operator";
-            await().atMost(TIMEOUT).ignoreExceptions().untilAsserted(() ->
-                    s3.putObject(PutObjectRequest.builder().bucket("e2e-bucket").key(key).build(),
-                            RequestBody.fromString(payload, StandardCharsets.UTF_8)));
+            await().atMost(TIMEOUT).ignoreExceptions().untilAsserted(() -> s3.putObject(
+                    PutObjectRequest.builder().bucket("e2e-bucket").key(key).build(),
+                    RequestBody.fromString(payload, StandardCharsets.UTF_8)));
             await().atMost(TIMEOUT).ignoreExceptions().untilAsserted(() ->
                     s3.headBucket(HeadBucketRequest.builder().bucket("delete-me").build()));
+            assertThat(s3.getObjectAsBytes(GetObjectRequest.builder().bucket("e2e-bucket").key(key).build()).asUtf8String()).isEqualTo(payload);
 
-            assertThat(s3.getObjectAsBytes(GetObjectRequest.builder().bucket("e2e-bucket").key(key).build()).asUtf8String())
-                    .isEqualTo(payload);
-
-            // Force another successful reconciliation through spec changes and verify idempotence/condition semantics.
             client.resources(S3User.class).inNamespace(NAMESPACE).withName("e2e-user").edit(user -> {
-                user.getSpec().setRole("admin");
-                return user;
+                user.getSpec().setRole("admin"); return user;
             });
             client.resources(S3Bucket.class).inNamespace(NAMESPACE).withName("e2e-bucket").edit(bucket -> {
-                bucket.getSpec().setDeletionPolicy(S3BucketSpec.DeletionPolicy.DELETE);
-                return bucket;
+                bucket.getSpec().setDeletionPolicy(S3BucketSpec.DeletionPolicy.DELETE); return bucket;
             });
             await().atMost(TIMEOUT).untilAsserted(() -> {
                 S3User reconciledUser = awaitUserReady("e2e-user");
                 S3Bucket reconciledBucket = awaitBucketReady("e2e-bucket");
                 assertThat(reconciledUser.getMetadata().getGeneration()).isGreaterThan(readyUser.getMetadata().getGeneration());
                 assertThat(reconciledBucket.getMetadata().getGeneration()).isGreaterThan(readyBucket.getMetadata().getGeneration());
-                assertThat(reconciledUser.getStatus().getConditions().getFirst().getLastTransitionTime())
-                        .isEqualTo(originalUserTransition);
-                assertThat(reconciledBucket.getStatus().getConditions().getFirst().getLastTransitionTime())
-                        .isEqualTo(originalBucketTransition);
+                assertThat(reconciledUser.getStatus().getConditions().getFirst().getLastTransitionTime()).isEqualTo(originalUserTransition);
+                assertThat(reconciledBucket.getStatus().getConditions().getFirst().getLastTransitionTime()).isEqualTo(originalBucketTransition);
                 s3.headBucket(HeadBucketRequest.builder().bucket("e2e-bucket").build());
             });
             client.resources(S3Bucket.class).inNamespace(NAMESPACE).withName("e2e-bucket").edit(bucket -> {
-                bucket.getSpec().setDeletionPolicy(S3BucketSpec.DeletionPolicy.RETAIN);
-                return bucket;
+                bucket.getSpec().setDeletionPolicy(S3BucketSpec.DeletionPolicy.RETAIN); return bucket;
             });
             awaitBucketReady("e2e-bucket");
 
-            // User deletion is blocked while buckets reference it.
             client.resources(S3User.class).inNamespace(NAMESPACE).withName("e2e-user").delete();
             await().during(Duration.ofSeconds(1)).atMost(TIMEOUT).untilAsserted(() -> {
                 S3User terminating = client.resources(S3User.class).inNamespace(NAMESPACE).withName("e2e-user").get();
@@ -113,22 +100,17 @@ class OperatorE2ETest {
                 assertThat(terminating.getMetadata().getDeletionTimestamp()).isNotNull();
             });
 
-            // DELETE removes the external bucket; RETAIN only removes the CR.
             client.resources(S3Bucket.class).inNamespace(NAMESPACE).withName("delete-me").delete();
             awaitResourceDeleted(S3Bucket.class, "delete-me");
             await().atMost(TIMEOUT).until(() -> backendBucketMissing(s3, "delete-me"));
-
             client.resources(S3Bucket.class).inNamespace(NAMESPACE).withName("e2e-bucket").delete();
             awaitResourceDeleted(S3Bucket.class, "e2e-bucket");
             s3.headBucket(HeadBucketRequest.builder().bucket("e2e-bucket").build());
-
-            // Missing generated credentials still allows user cleanup via status.accessKeyId.
             client.secrets().inNamespace(NAMESPACE).withName("e2e-user-s3").delete();
             awaitResourceDeleted(S3User.class, "e2e-user");
             await().atMost(TIMEOUT).until(() -> credentialsRejected(s3, "e2e-bucket"));
         }
 
-        // Missing backend must never deadlock user finalization.
         createUser("backend-missing-user", "backend-to-delete");
         awaitUserReady("backend-missing-user");
         client.resources(S3Backend.class).inNamespace(NAMESPACE).withName("backend-to-delete").delete();
@@ -136,14 +118,12 @@ class OperatorE2ETest {
         client.resources(S3User.class).inNamespace(NAMESPACE).withName("backend-missing-user").delete();
         awaitResourceDeleted(S3User.class, "backend-missing-user");
 
-        // Missing admin credentials must not deadlock either user or DELETE-bucket finalization.
         createAdminSecret("temporary-admin");
         createBackend("admin-missing", "temporary-admin");
         createUser("admin-missing-user", "admin-missing");
         awaitSecret("admin-missing-user-s3");
         createBucket("admin-missing-bucket", "admin-missing", "admin-missing-user", S3BucketSpec.DeletionPolicy.DELETE);
         awaitBucketReady("admin-missing-bucket");
-
         client.secrets().inNamespace(NAMESPACE).withName("temporary-admin").delete();
         client.resources(S3Bucket.class).inNamespace(NAMESPACE).withName("admin-missing-bucket").delete();
         awaitResourceDeleted(S3Bucket.class, "admin-missing-bucket");
@@ -152,29 +132,21 @@ class OperatorE2ETest {
     }
 
     private S3Client s3(String accessKey, String secretKey) {
-        return S3Client.builder()
-                .endpointOverride(URI.create(endpoint))
-                .region(Region.US_EAST_1)
+        return S3Client.builder().endpointOverride(URI.create(endpoint)).region(Region.US_EAST_1)
                 .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)))
                 .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
-                .httpClientBuilder(UrlConnectionHttpClient.builder())
-                .build();
+                .httpClientBuilder(UrlConnectionHttpClient.builder()).build();
     }
 
-    private void createAdminSecret() {
-        createAdminSecret("versity-admin");
-    }
+    private void createAdminSecret() { createAdminSecret("versity-admin"); }
 
     private void createAdminSecret(String name) {
-        client.secrets().resource(new SecretBuilder()
-                .withNewMetadata().withName(name).withNamespace(NAMESPACE).endMetadata()
-                .addToStringData("accessKey", "test-root-access")
-                .addToStringData("secretKey", "test-root-secret")
-                .build()).create();
+        client.secrets().resource(new SecretBuilder().withNewMetadata().withName(name).withNamespace(NAMESPACE).endMetadata()
+                .addToStringData("accessKey", "test-root-access").addToStringData("secretKey", "test-root-secret").build()).create();
     }
 
     private void createBackend(String name, String adminSecretName) {
-        S3BackendSpec.SecretRef adminRef = new S3BackendSpec.SecretRef();
+        LocalObjectReference adminRef = new LocalObjectReference();
         adminRef.setName(adminSecretName);
         S3BackendSpec spec = new S3BackendSpec();
         spec.setProvider("versity");
@@ -252,26 +224,17 @@ class OperatorE2ETest {
     }
 
     private <T extends HasMetadata> void awaitResourceDeleted(Class<T> type, String name) {
-        await().atMost(TIMEOUT).untilAsserted(() -> assertThat(
-                client.resources(type).inNamespace(NAMESPACE).withName(name).get()).isNull());
+        await().atMost(TIMEOUT).untilAsserted(() -> assertThat(client.resources(type).inNamespace(NAMESPACE).withName(name).get()).isNull());
     }
 
     private static boolean backendBucketMissing(S3Client s3, String bucket) {
-        try {
-            s3.headBucket(HeadBucketRequest.builder().bucket(bucket).build());
-            return false;
-        } catch (S3Exception e) {
-            return e.statusCode() == 404;
-        }
+        try { s3.headBucket(HeadBucketRequest.builder().bucket(bucket).build()); return false; }
+        catch (S3Exception e) { return e.statusCode() == 404; }
     }
 
     private static boolean credentialsRejected(S3Client s3, String bucket) {
-        try {
-            s3.headBucket(HeadBucketRequest.builder().bucket(bucket).build());
-            return false;
-        } catch (S3Exception e) {
-            return e.statusCode() == 403 || e.statusCode() == 401;
-        }
+        try { s3.headBucket(HeadBucketRequest.builder().bucket(bucket).build()); return false; }
+        catch (S3Exception e) { return e.statusCode() == 403 || e.statusCode() == 401; }
     }
 
     private static String secretValue(Secret secret, String key) {
