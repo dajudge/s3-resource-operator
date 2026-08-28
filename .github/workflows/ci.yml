@@ -86,14 +86,14 @@ jobs:
           if-no-files-found: error
 
       - name: Upload test reports
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-reports
           path: |
             target/surefire-reports/**
             target/failsafe-reports/**
-          if-no-files-found: ignore
+          if-no-files-found: error
 
   pmd:
     runs-on: ubuntu-latest
@@ -320,3 +320,224 @@ jobs:
           test "${{ needs.mutation-test.result }}" = success
           test "${{ needs.event-source-mutation-test.result }}" = success
           test "${{ needs.native-build.result }}" = success
+
+  publish-quality-badges:
+    runs-on: ubuntu-latest
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.verify.result == 'success'
+    permissions:
+      actions: read
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download JaCoCo report
+        uses: actions/download-artifact@v4
+        with:
+          name: jacoco-report
+          path: /tmp/jacoco
+
+      - name: Download JUnit reports
+        uses: actions/download-artifact@v4
+        with:
+          name: test-reports
+          path: /tmp/tests
+
+      - name: Download PIT report
+        uses: actions/download-artifact@v4
+        with:
+          name: pit-report
+          path: /tmp/pit
+
+      - name: Generate quality dashboard and Shields endpoint data
+        shell: python
+        env:
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          import json
+          import os
+          from collections import Counter
+          from datetime import datetime, timezone
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          output = Path('/tmp/quality-dashboard')
+          metrics_dir = output / 'metrics'
+          metrics_dir.mkdir(parents=True, exist_ok=True)
+
+          def find_one(root, name):
+              matches = list(Path(root).rglob(name))
+              if len(matches) != 1:
+                  raise RuntimeError(f'Expected one {name} under {root}, found {len(matches)}')
+              return matches[0]
+
+          def percentage(covered, missed=0):
+              total = covered + missed
+              return 100.0 if total == 0 else covered * 100.0 / total
+
+          def format_percentage(value):
+              return f'{value:.1f}'.rstrip('0').rstrip('.') + '%'
+
+          def color(value):
+              if value >= 90:
+                  return 'brightgreen'
+              if value >= 80:
+                  return 'green'
+              if value >= 70:
+                  return 'yellowgreen'
+              if value >= 60:
+                  return 'yellow'
+              return 'red'
+
+          def write_badge(name, label, value):
+              data = {
+                  'schemaVersion': 1,
+                  'label': label,
+                  'message': format_percentage(value),
+                  'color': color(value),
+              }
+              (metrics_dir / f'{name}.json').write_text(json.dumps(data) + '\n')
+
+          jacoco = ET.parse(find_one('/tmp/jacoco', 'jacoco.xml')).getroot()
+          counters = {
+              counter.attrib['type']: (int(counter.attrib['covered']), int(counter.attrib['missed']))
+              for counter in jacoco.findall('counter')
+          }
+          coverage = {
+              name: percentage(covered, missed)
+              for name, (covered, missed) in counters.items()
+          }
+
+          mutations = ET.parse(find_one('/tmp/pit', 'mutations.xml')).getroot().findall('mutation')
+          mutation_statuses = Counter(mutation.attrib.get('status', 'UNKNOWN') for mutation in mutations)
+          detected = sum(mutation.attrib.get('detected') == 'true' for mutation in mutations)
+          mutation_score = percentage(detected, len(mutations) - detected)
+
+          junit = Counter()
+          junit_time = 0.0
+          junit_files = list(Path('/tmp/tests').rglob('TEST-*.xml'))
+          if not junit_files:
+              raise RuntimeError('No JUnit TEST-*.xml reports found')
+          for report in junit_files:
+              root = ET.parse(report).getroot()
+              suites = [root] if root.tag == 'testsuite' else root.findall('.//testsuite')
+              for suite in suites:
+                  junit['tests'] += int(suite.attrib.get('tests', 0))
+                  junit['failures'] += int(suite.attrib.get('failures', 0))
+                  junit['errors'] += int(suite.attrib.get('errors', 0))
+                  junit['skipped'] += int(suite.attrib.get('skipped', 0))
+                  junit_time += float(suite.attrib.get('time', 0.0))
+
+          write_badge('line-coverage', 'line coverage', coverage['LINE'])
+          write_badge('branch-coverage', 'branch coverage', coverage['BRANCH'])
+          write_badge('mutation-score', 'reconciler mutation score', mutation_score)
+
+          repository = os.environ['REPOSITORY']
+          commit_sha = os.environ['COMMIT_SHA']
+          run_id = os.environ['RUN_ID']
+          short_sha = commit_sha[:7]
+          commit_url = f'https://github.com/{repository}/commit/{commit_sha}'
+          run_url = f'https://github.com/{repository}/actions/runs/{run_id}'
+          raw_base = f'https://raw.githubusercontent.com/{repository}/badges/metrics'
+          shields = 'https://img.shields.io/endpoint?url='
+
+          coverage_rows = []
+          for name in ('INSTRUCTION', 'LINE', 'BRANCH', 'COMPLEXITY', 'METHOD', 'CLASS'):
+              covered, missed = counters[name]
+              total = covered + missed
+              coverage_rows.append(
+                  f'| {name.title()} | **{format_percentage(coverage[name])}** | {covered} / {total} |'
+              )
+
+          mutation_rows = []
+          for status in ('KILLED', 'SURVIVED', 'NO_COVERAGE', 'TIMED_OUT', 'NON_VIABLE', 'MEMORY_ERROR', 'RUN_ERROR'):
+              if mutation_statuses[status]:
+                  mutation_rows.append(f'| {status.replace("_", " ").title()} | {mutation_statuses[status]} |')
+          if not mutation_rows:
+              mutation_rows.append('| Generated mutations | 0 |')
+
+          generated = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
+          dashboard = f'''# Quality Dashboard
+
+          > Automatically generated from [`{short_sha}`]({commit_url}) after a successful [`main` CI run]({run_url}) on {generated}. Do not edit this branch manually.
+
+          [![Line coverage]({shields}{raw_base}/line-coverage.json)]({run_url})
+          [![Branch coverage]({shields}{raw_base}/branch-coverage.json)]({run_url})
+          [![Reconciler mutation score]({shields}{raw_base}/mutation-score.json)]({run_url})
+
+          ## JUnit
+
+          | Metric | Result |
+          | --- | ---: |
+          | Tests | **{junit['tests']}** |
+          | Failures | **{junit['failures']}** |
+          | Errors | **{junit['errors']}** |
+          | Skipped | {junit['skipped']} |
+          | Test runtime | {junit_time:.2f} s |
+          | Report files | {len(junit_files)} |
+
+          ## JaCoCo
+
+          | Coverage | Result | Covered |
+          | --- | ---: | ---: |
+          {chr(10).join(coverage_rows)}
+
+          ## PIT mutation testing (configured reconciler scope)
+
+          The normal PIT profile covers `ResourceValidation`, `ReconcilerSupport`, `S3UserReconciler`, and `S3BucketReconciler`. It is not a project-wide mutation score.
+
+          | Metric | Result |
+          | --- | ---: |
+          | Reconciler-scope mutation score | **{format_percentage(mutation_score)}** |
+          | Detected | **{detected} / {len(mutations)}** |
+          {chr(10).join(mutation_rows)}
+
+          ## Quality gates
+
+          The dashboard is published only after all aggregate CI requirements pass:
+
+          | Gate | Result |
+          | --- | :---: |
+          | Formatting | ✅ |
+          | Clean Code / Checkstyle | ✅ |
+          | JUnit | ✅ |
+          | PMD / CPD | ✅ |
+          | SpotBugs | ✅ |
+          | Runtime license validation | ✅ |
+          | Helm + cluster E2E | ✅ |
+          | PIT mutation testing | ✅ |
+          | Focused event-source PIT | ✅ |
+          | Native build + ABI smoke test | ✅ |
+
+          Full JaCoCo, PIT, and test-report artifacts are attached to the [source CI run]({run_url}).
+          '''
+          (output / 'README.md').write_text('\n'.join(line.strip() for line in dashboard.splitlines()) + '\n')
+
+      - name: Publish quality dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+
+          if git fetch origin badges:refs/remotes/origin/badges 2>/dev/null; then
+            git switch --force-create badges refs/remotes/origin/badges
+            git rm -rf .
+          else
+            git switch --orphan badges
+            git rm -rf . || true
+          fi
+
+          cp -R /tmp/quality-dashboard/. .
+          git add README.md metrics
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "Update quality dashboard for ${GITHUB_SHA}"
+          git push origin badges
