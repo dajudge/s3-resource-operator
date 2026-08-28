@@ -2,6 +2,12 @@ package com.dajudge.s3operator.reconciler;
 
 import static com.dajudge.s3operator.reconciler.Fabric8TestMocks.stubResourceGet;
 import static com.dajudge.s3operator.reconciler.Fabric8TestMocks.stubSecrets;
+import static com.dajudge.s3operator.reconciler.ReconcilerTestFixtures.ENDPOINT;
+import static com.dajudge.s3operator.reconciler.ReconcilerTestFixtures.adminSecret;
+import static com.dajudge.s3operator.reconciler.ReconcilerTestFixtures.backend;
+import static com.dajudge.s3operator.reconciler.ReconcilerTestFixtures.bucket;
+import static com.dajudge.s3operator.reconciler.ReconcilerTestFixtures.user;
+import static com.dajudge.s3operator.reconciler.ReconcilerTestFixtures.userSecret;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
@@ -15,13 +21,9 @@ import com.dajudge.s3operator.api.S3BackendSpec;
 import com.dajudge.s3operator.api.S3Bucket;
 import com.dajudge.s3operator.api.S3BucketSpec;
 import com.dajudge.s3operator.api.S3User;
-import com.dajudge.s3operator.api.S3UserSpec;
 import com.dajudge.s3operator.provider.S3ProviderException;
 import com.dajudge.s3operator.provider.VersityS3Provider;
-import io.fabric8.kubernetes.api.model.LocalObjectReference;
-import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
 import io.fabric8.kubernetes.api.model.Secret;
-import io.fabric8.kubernetes.api.model.SecretBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.api.reconciler.EventSourceContext;
@@ -29,15 +31,14 @@ import java.time.Duration;
 import org.junit.jupiter.api.Test;
 
 class S3BucketReconcilerTest {
-    private static final String NS = "ns";
-    private static final String ENDPOINT = "http://versity:7070";
 
     @Test
     void reconcilesBucketAndPublishesReadyStatus() {
         KubernetesClient client = mock(KubernetesClient.class);
         VersityS3Provider provider = mock(VersityS3Provider.class);
         S3Bucket bucket = bucket("photos", "backend", "alice", null, S3BucketSpec.DeletionPolicy.RETAIN);
-        stubDependencies(client, provider, backend(), user("alice", null), userSecret("alice-s3"), adminSecret());
+        stubDependencies(
+                client, provider, backend(), user("alice", "backend", null), userSecret("alice-s3"), adminSecret());
 
         var control = reconciler(client, provider).reconcile(bucket, mock(Context.class));
 
@@ -64,7 +65,7 @@ class S3BucketReconcilerTest {
                 client,
                 provider,
                 backend(),
-                user("alice", "custom-secret"),
+                user("alice", "backend", "custom-secret"),
                 userSecret("custom-secret"),
                 adminSecret());
 
@@ -98,7 +99,7 @@ class S3BucketReconcilerTest {
         S3Bucket bucketWithInvalidUser = bucket("photos", "backend", "alice", null, S3BucketSpec.DeletionPolicy.RETAIN);
         when(provider.type()).thenReturn("versity");
         stubResourceGet(invalidUserClient, S3Backend.class, "backend", backend());
-        S3User invalidUser = user("alice", null);
+        S3User invalidUser = user("alice", "backend", null);
         invalidUser.getSpec().setBackendRef(null);
         stubResourceGet(invalidUserClient, S3User.class, "alice", invalidUser);
 
@@ -123,7 +124,7 @@ class S3BucketReconcilerTest {
         KubernetesClient missingSecretClient = mock(KubernetesClient.class);
         S3Bucket missingSecret = bucket("photos", "backend", "alice", null, S3BucketSpec.DeletionPolicy.RETAIN);
         stubResourceGet(missingSecretClient, S3Backend.class, "backend", backend());
-        stubResourceGet(missingSecretClient, S3User.class, "alice", user("alice", null));
+        stubResourceGet(missingSecretClient, S3User.class, "alice", user("alice", "backend", null));
         stubSecrets(missingSecretClient, new SecretResult("alice-s3", null));
 
         assertThat(reconciler(missingSecretClient, provider).reconcile(missingSecret, mock(Context.class)))
@@ -136,7 +137,8 @@ class S3BucketReconcilerTest {
         KubernetesClient client = mock(KubernetesClient.class);
         VersityS3Provider provider = mock(VersityS3Provider.class);
         S3Bucket bucket = bucket("photos", "backend", "alice", null, S3BucketSpec.DeletionPolicy.RETAIN);
-        stubDependencies(client, provider, backend(), user("alice", null), userSecret("alice-s3"), adminSecret());
+        stubDependencies(
+                client, provider, backend(), user("alice", "backend", null), userSecret("alice-s3"), adminSecret());
         doThrow(new S3ProviderException("provider boom"))
                 .when(provider)
                 .createBucket(ENDPOINT, "admin-access", "admin-secret", "photos", "alice-access");
@@ -238,67 +240,5 @@ class S3BucketReconcilerTest {
             assertThat(condition.getReason()).isEqualTo(reason);
             assertThat(condition.getMessage()).isEqualTo(message);
         });
-    }
-
-    private static S3Bucket bucket(
-            String name,
-            String backendRef,
-            String userRef,
-            String bucketName,
-            S3BucketSpec.DeletionPolicy deletionPolicy) {
-        S3BucketSpec spec = new S3BucketSpec();
-        spec.setBackendRef(backendRef);
-        spec.setUserRef(userRef);
-        spec.setBucketName(bucketName);
-        spec.setDeletionPolicy(deletionPolicy);
-        S3Bucket bucket = new S3Bucket();
-        bucket.setMetadata(new ObjectMetaBuilder()
-                .withName(name)
-                .withNamespace(NS)
-                .withGeneration(9L)
-                .build());
-        bucket.setSpec(spec);
-        return bucket;
-    }
-
-    private static S3User user(String name, String secretName) {
-        S3UserSpec spec = new S3UserSpec();
-        spec.setBackendRef("backend");
-        spec.setSecretName(secretName);
-        S3User user = new S3User();
-        user.setMetadata(
-                new ObjectMetaBuilder().withName(name).withNamespace(NS).build());
-        user.setSpec(spec);
-        return user;
-    }
-
-    private static S3Backend backend() {
-        LocalObjectReference ref = new LocalObjectReference();
-        ref.setName("admin");
-        S3BackendSpec spec = new S3BackendSpec();
-        spec.setProvider("versity");
-        spec.setEndpoint(ENDPOINT);
-        spec.setAdminCredentialsSecretRef(ref);
-        S3Backend backend = new S3Backend();
-        backend.setSpec(spec);
-        return backend;
-    }
-
-    private static Secret userSecret(String name) {
-        return secret(name, "alice-access", "alice-secret");
-    }
-
-    private static Secret adminSecret() {
-        return secret("admin", "admin-access", "admin-secret");
-    }
-
-    private static Secret secret(String name, String accessKey, String secretKey) {
-        return new SecretBuilder()
-                .withNewMetadata()
-                .withName(name)
-                .endMetadata()
-                .addToStringData("accessKey", accessKey)
-                .addToStringData("secretKey", secretKey)
-                .build();
     }
 }
