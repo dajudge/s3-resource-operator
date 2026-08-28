@@ -2,16 +2,13 @@ package com.dajudge.s3operator;
 
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
-import org.junit.jupiter.api.Test;
-
 import java.time.Duration;
-import java.util.Map;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 @QuarkusTestResource(KindVersityTestResource.class)
-@TestProfile(DependencyWatchE2ETest.LongTimers.class)
+@TestProfile(LongTimersTestProfile.class)
 class DependencyWatchE2ETest extends OperatorE2ETestSupport {
 
     @Test
@@ -44,14 +41,5 @@ class DependencyWatchE2ETest extends OperatorE2ETestSupport {
         createUser("watch-user", "watch-user-backend");
         awaitUser("watch-user", "True", "Reconciled", Duration.ofSeconds(10));
         awaitBucket("watch-user-bucket", "True", "Reconciled", Duration.ofSeconds(10));
-    }
-
-    public static class LongTimers implements QuarkusTestProfile {
-        @Override
-        public Map<String, String> getConfigOverrides() {
-            return Map.of(
-                    "s3.operator.resync-interval", "1h",
-                    "s3.operator.retry-delay", "1h");
-        }
     }
 }
