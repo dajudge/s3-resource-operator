@@ -1,22 +1,4 @@
-from pathlib import Path
-
-source = Path("src/test/java/com/dajudge/s3operator/ExistingBehaviorE2ETest.java")
-text = source.read_text()
-
-start = text.index("    @Test\n    void generatedCrdsExposeExpectedKindsPluralsAndEnums()")
-end = text.index("    private void createBucket(", start)
-text = text[:start] + text[end:]
-
-for unused_import in [
-    "import static org.assertj.core.api.Assertions.assertThatThrownBy;\n",
-    "import java.io.ByteArrayInputStream;\n",
-    "import java.nio.file.Files;\n",
-    "import java.nio.file.Path;\n",
-]:
-    text = text.replace(unused_import, "")
-source.write_text(text)
-
-contract = '''package com.dajudge.s3operator;
+package com.dajudge.s3operator;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -43,9 +25,9 @@ class ApiContractE2ETest extends OperatorE2ETestSupport {
         String buckets = Files.readString(Path.of("target/kubernetes/s3buckets.s3.dajudge.com-v1.yml"));
         String users = Files.readString(Path.of("target/kubernetes/s3users.s3.dajudge.com-v1.yml"));
         String backends = Files.readString(Path.of("target/kubernetes/s3backends.s3.dajudge.com-v1.yml"));
-        assertThat(buckets).contains("kind: \\\"S3Bucket\\\"", "plural: \\\"s3buckets\\\"", "\\\"RETAIN\\\"", "\\\"DELETE\\\"");
-        assertThat(users).contains("kind: \\\"S3User\\\"", "plural: \\\"s3users\\\"");
-        assertThat(backends).contains("kind: \\\"S3Backend\\\"", "plural: \\\"s3backends\\\"");
+        assertThat(buckets).contains("kind: \"S3Bucket\"", "plural: \"s3buckets\"", "\"RETAIN\"", "\"DELETE\"");
+        assertThat(users).contains("kind: \"S3User\"", "plural: \"s3users\"");
+        assertThat(backends).contains("kind: \"S3Backend\"", "plural: \"s3backends\"");
     }
 
     @Test
@@ -112,5 +94,3 @@ class ApiContractE2ETest extends OperatorE2ETestSupport {
                 .create();
     }
 }
-'''
-Path("src/test/java/com/dajudge/s3operator/ApiContractE2ETest.java").write_text(contract)
