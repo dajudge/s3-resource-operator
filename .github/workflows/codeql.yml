@@ -33,7 +33,7 @@ jobs:
           build-mode: manual
 
       - name: Build for CodeQL
-        run: mvn --batch-mode --no-transfer-progress package -DskipUnitTests=true
+        run: mvn --batch-mode --no-transfer-progress -Punit-tests package -DskipUnitTests=true
 
       - name: Analyze
         uses: github/codeql-action/analyze@v4
