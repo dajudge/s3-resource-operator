@@ -96,7 +96,7 @@ final class RelatedResourceEventSources {
         return List.of(backends, users, secrets);
     }
 
-    private static boolean secretAffectsUser(KubernetesClient client, Secret secret, S3User user) {
+    static boolean secretAffectsUser(KubernetesClient client, Secret secret, S3User user) {
         if (!sameNamespace(user, secret)) return false;
         if (secret.getMetadata().getName().equals(userSecretName(user))) return true;
         S3Backend backend = client.resources(S3Backend.class)
@@ -109,7 +109,7 @@ final class RelatedResourceEventSources {
                         .equals(backend.getSpec().getAdminCredentialsSecretRef().getName());
     }
 
-    private static boolean secretAffectsBucket(KubernetesClient client, Secret secret, S3Bucket bucket) {
+    static boolean secretAffectsBucket(KubernetesClient client, Secret secret, S3Bucket bucket) {
         if (!sameNamespace(bucket, secret)) return false;
         String namespace = bucket.getMetadata().getNamespace();
         S3User user = client.resources(S3User.class)
@@ -128,13 +128,13 @@ final class RelatedResourceEventSources {
                         .equals(backend.getSpec().getAdminCredentialsSecretRef().getName());
     }
 
-    private static boolean sameNamespace(HasMetadata primary, HasMetadata secondary) {
+    static boolean sameNamespace(HasMetadata primary, HasMetadata secondary) {
         return primary.getMetadata()
                 .getNamespace()
                 .equals(secondary.getMetadata().getNamespace());
     }
 
-    private static String userSecretName(S3User user) {
+    static String userSecretName(S3User user) {
         return user.getSpec().getSecretName() == null
                         || user.getSpec().getSecretName().isBlank()
                 ? user.getMetadata().getName() + "-s3"
