@@ -3,6 +3,8 @@ package com.dajudge.s3operator.reconciler;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -13,12 +15,13 @@ import static org.mockito.Mockito.when;
 import com.dajudge.s3operator.api.S3Backend;
 import com.dajudge.s3operator.api.S3BackendSpec;
 import com.dajudge.s3operator.api.S3Bucket;
-import com.dajudge.s3operator.api.S3BucketList;
+import com.dajudge.s3operator.api.S3BucketSpec;
 import com.dajudge.s3operator.api.S3User;
 import com.dajudge.s3operator.api.S3UserSpec;
 import com.dajudge.s3operator.api.S3UserStatus;
 import com.dajudge.s3operator.provider.S3ProviderException;
 import com.dajudge.s3operator.provider.VersityS3Provider;
+import io.fabric8.kubernetes.api.model.KubernetesResourceList;
 import io.fabric8.kubernetes.api.model.LocalObjectReference;
 import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
 import io.fabric8.kubernetes.api.model.Secret;
@@ -38,16 +41,17 @@ class S3UserReconcilerTest {
         KubernetesClient client = mock(KubernetesClient.class, RETURNS_DEEP_STUBS);
         VersityS3Provider provider = mock(VersityS3Provider.class);
         S3User user = user("alice", "backend", null);
-        S3Backend backend = backend();
-        Secret admin = secret("admin", "admin-access", "admin-secret");
-        Secret credentials = secret("alice-s3", "alice-access", "alice-secret");
-        stubDependencies(client, provider, backend, admin, "alice-s3", credentials);
+        stubDependencies(
+                client,
+                provider,
+                backend(),
+                secret("admin", "admin-access", "admin-secret"),
+                "alice-s3",
+                secret("alice-s3", "alice-access", "alice-secret"));
 
-        S3UserReconciler reconciler = reconciler(client, provider);
-        reconciler.reconcile(user, mock(Context.class));
+        reconciler(client, provider).reconcile(user, mock(Context.class));
 
-        verify(provider)
-                .createUser(ENDPOINT, "admin-access", "admin-secret", "alice-access", "alice-secret", "user");
+        verify(provider).createUser(ENDPOINT, "admin-access", "admin-secret", "alice-access", "alice-secret", "user");
         assertThat(user.getStatus().getAccessKeyId()).isEqualTo("alice-access");
         assertThat(user.getStatus().getSecretName()).isEqualTo("alice-s3");
         assertThat(user.getStatus().getObservedGeneration()).isEqualTo(7L);
@@ -66,26 +70,30 @@ class S3UserReconcilerTest {
         KubernetesClient client = mock(KubernetesClient.class, RETURNS_DEEP_STUBS);
         VersityS3Provider provider = mock(VersityS3Provider.class);
         S3User user = user("alice", "backend", "custom-credentials");
-        S3Backend backend = backend();
-        Secret admin = secret("admin", "admin-access", "admin-secret");
         when(provider.type()).thenReturn("versity");
-        when(client.resources(S3Backend.class).inNamespace(NS).withName("backend").get()).thenReturn(backend);
-        when(client.secrets().inNamespace(NS).withName("admin").get()).thenReturn(admin);
-        when(client.secrets().inNamespace(NS).withName("custom-credentials").get()).thenReturn(null);
-        when(client.secrets().resource(any(Secret.class)).create()).thenAnswer(invocation -> invocation.getArgument(0));
+        when(client.resources(S3Backend.class)
+                        .inNamespace(NS)
+                        .withName("backend")
+                        .get())
+                .thenReturn(backend());
+        when(client.secrets().inNamespace(NS).withName("admin").get())
+                .thenReturn(secret("admin", "admin-access", "admin-secret"));
+        when(client.secrets().inNamespace(NS).withName("custom-credentials").get())
+                .thenReturn(null);
+        when(client.secrets().resource(any(Secret.class)).create())
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        S3UserReconciler reconciler = reconciler(client, provider);
-        reconciler.reconcile(user, mock(Context.class));
+        reconciler(client, provider).reconcile(user, mock(Context.class));
 
         assertThat(user.getStatus().getSecretName()).isEqualTo("custom-credentials");
         verify(provider)
                 .createUser(
-                        org.mockito.ArgumentMatchers.eq(ENDPOINT),
-                        org.mockito.ArgumentMatchers.eq("admin-access"),
-                        org.mockito.ArgumentMatchers.eq("admin-secret"),
-                        org.mockito.ArgumentMatchers.eq("ns.alice"),
-                        org.mockito.ArgumentMatchers.argThat(value -> value != null && !value.isBlank()),
-                        org.mockito.ArgumentMatchers.eq("user"));
+                        eq(ENDPOINT),
+                        eq("admin-access"),
+                        eq("admin-secret"),
+                        eq("ns.alice"),
+                        argThat(value -> value != null && !value.isBlank()),
+                        eq("user"));
     }
 
     @Test
@@ -93,16 +101,18 @@ class S3UserReconcilerTest {
         KubernetesClient client = mock(KubernetesClient.class, RETURNS_DEEP_STUBS);
         VersityS3Provider provider = mock(VersityS3Provider.class);
         S3User user = user("alice", "backend", null);
-        S3Backend backend = backend();
-        Secret admin = secret("admin", "admin-access", "admin-secret");
-        Secret credentials = secret("alice-s3", "alice-access", "alice-secret");
-        stubDependencies(client, provider, backend, admin, "alice-s3", credentials);
+        stubDependencies(
+                client,
+                provider,
+                backend(),
+                secret("admin", "admin-access", "admin-secret"),
+                "alice-s3",
+                secret("alice-s3", "alice-access", "alice-secret"));
         doThrow(new S3ProviderException("provider boom"))
                 .when(provider)
                 .createUser(ENDPOINT, "admin-access", "admin-secret", "alice-access", "alice-secret", "user");
 
-        S3UserReconciler reconciler = reconciler(client, provider);
-        reconciler.reconcile(user, mock(Context.class));
+        reconciler(client, provider).reconcile(user, mock(Context.class));
 
         assertThat(user.getStatus().getConditions()).singleElement().satisfies(condition -> {
             assertThat(condition.getStatus()).isEqualTo("False");
@@ -133,13 +143,11 @@ class S3UserReconcilerTest {
         VersityS3Provider provider = mock(VersityS3Provider.class);
         S3User user = user("alice", "backend", null);
         S3Bucket bucket = new S3Bucket();
-        var spec = new com.dajudge.s3operator.api.S3BucketSpec();
+        S3BucketSpec spec = new S3BucketSpec();
         spec.setBackendRef("backend");
         spec.setUserRef("alice");
         bucket.setSpec(spec);
-        S3BucketList list = new S3BucketList();
-        list.setItems(List.of(bucket));
-        when(client.resources(S3Bucket.class).inNamespace(NS).list()).thenReturn(list);
+        when(bucketList(client).getItems()).thenReturn(List.of(bucket));
 
         assertThatThrownBy(() -> reconciler(client, provider).cleanup(user, mock(Context.class)))
                 .isInstanceOf(IllegalStateException.class)
@@ -155,19 +163,25 @@ class S3UserReconcilerTest {
         S3UserStatus status = new S3UserStatus();
         status.setAccessKeyId("status-access");
         user.setStatus(status);
-        S3Backend backend = backend();
-        Secret admin = secret("admin", "admin-access", "admin-secret");
-        S3BucketList empty = new S3BucketList();
-        empty.setItems(List.of());
-        when(client.resources(S3Bucket.class).inNamespace(NS).list()).thenReturn(empty);
+        when(bucketList(client).getItems()).thenReturn(List.of());
         when(provider.type()).thenReturn("versity");
-        when(client.resources(S3Backend.class).inNamespace(NS).withName("backend").get()).thenReturn(backend);
-        when(client.secrets().inNamespace(NS).withName("admin").get()).thenReturn(admin);
+        when(client.resources(S3Backend.class)
+                        .inNamespace(NS)
+                        .withName("backend")
+                        .get())
+                .thenReturn(backend());
+        when(client.secrets().inNamespace(NS).withName("admin").get())
+                .thenReturn(secret("admin", "admin-access", "admin-secret"));
         when(client.secrets().inNamespace(NS).withName("alice-s3").get()).thenReturn(null);
 
         reconciler(client, provider).cleanup(user, mock(Context.class));
 
         verify(provider).deleteUser(ENDPOINT, "admin-access", "admin-secret", "status-access");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static KubernetesResourceList<S3Bucket> bucketList(KubernetesClient client) {
+        return client.resources(S3Bucket.class).inNamespace(NS).list();
     }
 
     private static S3UserReconciler reconciler(KubernetesClient client, VersityS3Provider provider) {
@@ -187,9 +201,14 @@ class S3UserReconcilerTest {
             String credentialsName,
             Secret credentials) {
         when(provider.type()).thenReturn("versity");
-        when(client.resources(S3Backend.class).inNamespace(NS).withName("backend").get()).thenReturn(backend);
+        when(client.resources(S3Backend.class)
+                        .inNamespace(NS)
+                        .withName("backend")
+                        .get())
+                .thenReturn(backend);
         when(client.secrets().inNamespace(NS).withName("admin").get()).thenReturn(admin);
-        when(client.secrets().inNamespace(NS).withName(credentialsName).get()).thenReturn(credentials);
+        when(client.secrets().inNamespace(NS).withName(credentialsName).get())
+                .thenReturn(credentials);
     }
 
     private static S3User user(String name, String backendRef, String secretName) {
@@ -199,7 +218,12 @@ class S3UserReconcilerTest {
         S3User user = new S3User();
         user.setApiVersion("s3.dajudge.com/v1alpha1");
         user.setKind("S3User");
-        user.setMetadata(new ObjectMetaBuilder().withName(name).withNamespace(NS).withUid("uid").withGeneration(7L).build());
+        user.setMetadata(new ObjectMetaBuilder()
+                .withName(name)
+                .withNamespace(NS)
+                .withUid("uid")
+                .withGeneration(7L)
+                .build());
         user.setSpec(spec);
         return user;
     }
