@@ -25,6 +25,9 @@ Guidance for coding agents working in this repository.
 - If CI is red because of the PR, fix it before merging.
 - A PR is considered green only when its relevant focused jobs and aggregate required checks have passed.
 - Avoid creating no-op or artificial commits solely to work around CI unless a fresh user-authored commit is genuinely required to trigger checks.
+- Temporary repair/export workflows are allowed when the normal toolchain cannot conveniently apply a generated fix from the agent environment, but keep them one-shot and branch-scoped.
+- When practical, make a temporary workflow apply its generated fix itself, commit the result back to the same PR branch, and delete its own workflow file in that same commit or run. Avoid leaving an artifact-download/manual-copy cleanup step for the next agent turn.
+- A temporary self-mutating workflow must be constrained to trusted same-repository branches, use only the minimum required write permissions, and avoid recursive reruns after it removes itself.
 
 ## Clean Code
 
