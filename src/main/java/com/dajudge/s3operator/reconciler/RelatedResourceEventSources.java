@@ -1,6 +1,7 @@
 package com.dajudge.s3operator.reconciler;
 
 import com.dajudge.s3operator.api.S3Backend;
+import com.dajudge.s3operator.api.S3Bucket;
 import com.dajudge.s3operator.api.S3User;
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.Secret;
@@ -61,12 +62,65 @@ final class RelatedResourceEventSources {
         return List.of(backends, secrets);
     }
 
+    static List<EventSource<?, S3Bucket>> forBucket(KubernetesClient client, EventSourceContext<S3Bucket> context) {
+        var backends = informer(
+                S3Backend.class,
+                S3Bucket.class,
+                context,
+                backend -> matching(
+                        context,
+                        bucket -> ResourceValidation.hasUsableBucketSpec(bucket)
+                                && sameNamespace(bucket, backend)
+                                && backend.getMetadata()
+                                        .getName()
+                                        .equals(bucket.getSpec().getBackendRef())));
+        var users = informer(
+                S3User.class,
+                S3Bucket.class,
+                context,
+                user -> matching(
+                        context,
+                        bucket -> ResourceValidation.hasUsableBucketSpec(bucket)
+                                && sameNamespace(bucket, user)
+                                && user.getMetadata()
+                                        .getName()
+                                        .equals(bucket.getSpec().getUserRef())));
+        var secrets = informer(
+                Secret.class,
+                S3Bucket.class,
+                context,
+                secret -> matching(
+                        context,
+                        bucket -> ResourceValidation.hasUsableBucketSpec(bucket)
+                                && secretAffectsBucket(client, secret, bucket)));
+        return List.of(backends, users, secrets);
+    }
+
     private static boolean secretAffectsUser(KubernetesClient client, Secret secret, S3User user) {
         if (!sameNamespace(user, secret)) return false;
         if (secret.getMetadata().getName().equals(userSecretName(user))) return true;
         S3Backend backend = client.resources(S3Backend.class)
                 .inNamespace(user.getMetadata().getNamespace())
                 .withName(user.getSpec().getBackendRef())
+                .get();
+        return ResourceValidation.hasUsableBackendSpec(backend)
+                && secret.getMetadata()
+                        .getName()
+                        .equals(backend.getSpec().getAdminCredentialsSecretRef().getName());
+    }
+
+    private static boolean secretAffectsBucket(KubernetesClient client, Secret secret, S3Bucket bucket) {
+        if (!sameNamespace(bucket, secret)) return false;
+        String namespace = bucket.getMetadata().getNamespace();
+        S3User user = client.resources(S3User.class)
+                .inNamespace(namespace)
+                .withName(bucket.getSpec().getUserRef())
+                .get();
+        if (ResourceValidation.hasUsableUserSpec(user)
+                && secret.getMetadata().getName().equals(userSecretName(user))) return true;
+        S3Backend backend = client.resources(S3Backend.class)
+                .inNamespace(namespace)
+                .withName(bucket.getSpec().getBackendRef())
                 .get();
         return ResourceValidation.hasUsableBackendSpec(backend)
                 && secret.getMetadata()
