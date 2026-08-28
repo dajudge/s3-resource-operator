@@ -32,8 +32,11 @@ import io.fabric8.kubernetes.client.dsl.MixedOperation;
 import io.fabric8.kubernetes.client.dsl.NonNamespaceOperation;
 import io.fabric8.kubernetes.client.dsl.Resource;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
+import io.javaoperatorsdk.operator.api.reconciler.EventSourceContext;
 import java.time.Duration;
+import java.util.Base64;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 class S3UserReconcilerTest {
@@ -53,8 +56,9 @@ class S3UserReconcilerTest {
                 "alice-s3",
                 secret("alice-s3", "alice-access", "alice-secret"));
 
-        reconciler(client, provider).reconcile(user, mock(Context.class));
+        var control = reconciler(client, provider).reconcile(user, mock(Context.class));
 
+        assertThat(control).isNotNull();
         verify(provider).createUser(ENDPOINT, "admin-access", "admin-secret", "alice-access", "alice-secret", "user");
         assertThat(user.getStatus().getAccessKeyId()).isEqualTo("alice-access");
         assertThat(user.getStatus().getSecretName()).isEqualTo("alice-s3");
@@ -70,7 +74,7 @@ class S3UserReconcilerTest {
     }
 
     @Test
-    void usesConfiguredSecretNameAndCreatesCredentialsWhenMissing() {
+    void usesConfiguredSecretNameAndCreatesRandomCredentialsWhenMissing() {
         KubernetesClient client = mock(KubernetesClient.class);
         VersityS3Provider provider = mock(VersityS3Provider.class);
         S3User user = user("alice", "backend", "custom-credentials");
@@ -80,24 +84,30 @@ class S3UserReconcilerTest {
                 client,
                 new SecretResult("admin", secret("admin", "admin-access", "admin-secret")),
                 new SecretResult("custom-credentials", null));
+        AtomicReference<Secret> createdSecret = new AtomicReference<>();
         when(secrets.resource(any(Secret.class))).thenAnswer(invocation -> {
             Secret created = invocation.getArgument(0);
+            createdSecret.set(created);
             @SuppressWarnings("unchecked")
             Resource<Secret> resource = mock(Resource.class);
             when(resource.create()).thenReturn(created);
             return resource;
         });
 
-        reconciler(client, provider).reconcile(user, mock(Context.class));
+        var control = reconciler(client, provider).reconcile(user, mock(Context.class));
 
+        assertThat(control).isNotNull();
         assertThat(user.getStatus().getSecretName()).isEqualTo("custom-credentials");
+        String generatedSecret = createdSecret.get().getStringData().get("secretKey");
+        String zeroSecret = Base64.getUrlEncoder().withoutPadding().encodeToString(new byte[32]);
+        assertThat(generatedSecret).hasSize(43).isNotEqualTo(zeroSecret);
         verify(provider)
                 .createUser(
                         eq(ENDPOINT),
                         eq("admin-access"),
                         eq("admin-secret"),
                         eq("ns.alice"),
-                        argThat(value -> value != null && !value.isBlank()),
+                        argThat(generatedSecret::equals),
                         eq("user"));
     }
 
@@ -117,8 +127,9 @@ class S3UserReconcilerTest {
                 .when(provider)
                 .createUser(ENDPOINT, "admin-access", "admin-secret", "alice-access", "alice-secret", "user");
 
-        reconciler(client, provider).reconcile(user, mock(Context.class));
+        var control = reconciler(client, provider).reconcile(user, mock(Context.class));
 
+        assertThat(control).isNotNull();
         assertThat(user.getStatus().getConditions()).singleElement().satisfies(condition -> {
             assertThat(condition.getStatus()).isEqualTo("False");
             assertThat(condition.getReason()).isEqualTo("ProviderError");
@@ -127,19 +138,43 @@ class S3UserReconcilerTest {
     }
 
     @Test
-    void invalidSpecSetsFailureWithoutCallingProvider() {
-        KubernetesClient client = mock(KubernetesClient.class);
+    void invalidSpecsBecomeRetryableStatus() {
+        KubernetesClient invalidUserClient = mock(KubernetesClient.class);
         VersityS3Provider provider = mock(VersityS3Provider.class);
-        S3User user = user("alice", null, null);
+        S3User invalidUser = user("alice", null, null);
 
-        reconciler(client, provider).reconcile(user, mock(Context.class));
+        var invalidUserControl = reconciler(invalidUserClient, provider).reconcile(invalidUser, mock(Context.class));
 
+        assertThat(invalidUserControl).isNotNull();
         verify(provider, never()).createUser(any(), any(), any(), any(), any(), any());
-        assertThat(user.getStatus().getConditions()).singleElement().satisfies(condition -> {
+        assertThat(invalidUser.getStatus().getConditions()).singleElement().satisfies(condition -> {
             assertThat(condition.getStatus()).isEqualTo("False");
             assertThat(condition.getReason()).isEqualTo("InvalidSpec");
             assertThat(condition.getMessage()).isEqualTo("S3User spec.backendRef is required");
         });
+
+        KubernetesClient invalidBackendClient = mock(KubernetesClient.class);
+        S3User validUser = user("alice", "backend", null);
+        S3Backend invalidBackend = new S3Backend();
+        invalidBackend.setSpec(new S3BackendSpec());
+        stubResourceGet(invalidBackendClient, S3Backend.class, "backend", invalidBackend);
+
+        var invalidBackendControl = reconciler(invalidBackendClient, provider).reconcile(validUser, mock(Context.class));
+
+        assertThat(invalidBackendControl).isNotNull();
+        assertThat(validUser.getStatus().getConditions()).singleElement().satisfies(condition -> {
+            assertThat(condition.getStatus()).isEqualTo("False");
+            assertThat(condition.getReason()).isEqualTo("InvalidSpec");
+            assertThat(condition.getMessage()).isEqualTo("S3Backend spec.endpoint is required");
+        });
+    }
+
+    @Test
+    void preparesBackendAndSecretEventSources() {
+        KubernetesClient client = mock(KubernetesClient.class);
+        VersityS3Provider provider = mock(VersityS3Provider.class);
+
+        assertThat(reconciler(client, provider).prepareEventSources(mock(EventSourceContext.class))).hasSize(2);
     }
 
     @Test
@@ -147,17 +182,47 @@ class S3UserReconcilerTest {
         KubernetesClient client = mock(KubernetesClient.class);
         VersityS3Provider provider = mock(VersityS3Provider.class);
         S3User user = user("alice", "backend", null);
-        S3Bucket bucket = new S3Bucket();
-        S3BucketSpec spec = new S3BucketSpec();
-        spec.setBackendRef("backend");
-        spec.setUserRef("alice");
-        bucket.setSpec(spec);
+        S3Bucket bucket = bucketReferencing("alice");
         stubResourceList(client, S3Bucket.class, List.of(bucket));
 
         assertThatThrownBy(() -> reconciler(client, provider).cleanup(user, mock(Context.class)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("S3User is still referenced by an S3Bucket: alice");
         verify(provider, never()).deleteUser(any(), any(), any(), any());
+    }
+
+    @Test
+    void cleanupSkipsWhenDependenciesCannotSupportDeletion() {
+        VersityS3Provider provider = mock(VersityS3Provider.class);
+
+        KubernetesClient invalidUserClient = mock(KubernetesClient.class);
+        stubResourceList(invalidUserClient, S3Bucket.class, List.of());
+        assertThat(reconciler(invalidUserClient, provider).cleanup(user("alice", null, null), mock(Context.class)))
+                .isNotNull();
+
+        KubernetesClient missingBackendClient = mock(KubernetesClient.class);
+        stubResourceList(missingBackendClient, S3Bucket.class, List.of());
+        stubResourceGet(missingBackendClient, S3Backend.class, "backend", null);
+        assertThat(reconciler(missingBackendClient, provider).cleanup(user("alice", "backend", null), mock(Context.class)))
+                .isNotNull();
+
+        KubernetesClient unsupportedBackendClient = mock(KubernetesClient.class);
+        stubResourceList(unsupportedBackendClient, S3Bucket.class, List.of());
+        S3Backend unsupported = backend();
+        unsupported.getSpec().setProvider("other");
+        stubResourceGet(unsupportedBackendClient, S3Backend.class, "backend", unsupported);
+        when(provider.type()).thenReturn("versity");
+        assertThat(
+                        reconciler(unsupportedBackendClient, provider)
+                                .cleanup(user("alice", "backend", null), mock(Context.class)))
+                .isNotNull();
+
+        KubernetesClient missingAdminClient = mock(KubernetesClient.class);
+        stubResourceList(missingAdminClient, S3Bucket.class, List.of());
+        stubResourceGet(missingAdminClient, S3Backend.class, "backend", backend());
+        stubSecrets(missingAdminClient, new SecretResult("admin", null));
+        assertThat(reconciler(missingAdminClient, provider).cleanup(user("alice", "backend", null), mock(Context.class)))
+                .isNotNull();
     }
 
     @Test
@@ -168,7 +233,7 @@ class S3UserReconcilerTest {
         S3UserStatus status = new S3UserStatus();
         status.setAccessKeyId("status-access");
         user.setStatus(status);
-        stubResourceList(client, S3Bucket.class, List.of());
+        stubResourceList(client, S3Bucket.class, List.of(bucketReferencing("bob")));
         when(provider.type()).thenReturn("versity");
         stubResourceGet(client, S3Backend.class, "backend", backend());
         stubSecrets(
@@ -176,8 +241,9 @@ class S3UserReconcilerTest {
                 new SecretResult("admin", secret("admin", "admin-access", "admin-secret")),
                 new SecretResult("alice-s3", null));
 
-        reconciler(client, provider).cleanup(user, mock(Context.class));
+        var control = reconciler(client, provider).cleanup(user, mock(Context.class));
 
+        assertThat(control).isNotNull();
         verify(provider).deleteUser(ENDPOINT, "admin-access", "admin-secret", "status-access");
     }
 
@@ -256,6 +322,15 @@ class S3UserReconcilerTest {
                 .build());
         user.setSpec(spec);
         return user;
+    }
+
+    private static S3Bucket bucketReferencing(String userName) {
+        S3BucketSpec spec = new S3BucketSpec();
+        spec.setBackendRef("backend");
+        spec.setUserRef(userName);
+        S3Bucket bucket = new S3Bucket();
+        bucket.setSpec(spec);
+        return bucket;
     }
 
     private static S3Backend backend() {
