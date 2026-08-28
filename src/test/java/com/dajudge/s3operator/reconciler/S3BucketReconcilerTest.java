@@ -37,7 +37,8 @@ class S3BucketReconcilerTest {
         KubernetesClient client = mock(KubernetesClient.class);
         VersityS3Provider provider = mock(VersityS3Provider.class);
         S3Bucket bucket = bucket("photos", "backend", "alice", null, S3BucketSpec.DeletionPolicy.RETAIN);
-        stubDependencies(client, provider, backend(), user("alice", "backend", null), userSecret("alice-s3"), adminSecret());
+        stubDependencies(
+                client, provider, backend(), user("alice", "backend", null), userSecret("alice-s3"), adminSecret());
 
         var control = reconciler(client, provider).reconcile(bucket, mock(Context.class));
 
@@ -136,7 +137,8 @@ class S3BucketReconcilerTest {
         KubernetesClient client = mock(KubernetesClient.class);
         VersityS3Provider provider = mock(VersityS3Provider.class);
         S3Bucket bucket = bucket("photos", "backend", "alice", null, S3BucketSpec.DeletionPolicy.RETAIN);
-        stubDependencies(client, provider, backend(), user("alice", "backend", null), userSecret("alice-s3"), adminSecret());
+        stubDependencies(
+                client, provider, backend(), user("alice", "backend", null), userSecret("alice-s3"), adminSecret());
         doThrow(new S3ProviderException("provider boom"))
                 .when(provider)
                 .createBucket(ENDPOINT, "admin-access", "admin-secret", "photos", "alice-access");
