@@ -38,7 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 @QuarkusIntegrationTest
-@QuarkusTestResource(KindVersityTestResource.class)
+@QuarkusTestResource(K3sVersityTestResource.class)
 class NativeOperatorIT {
     private static final String NS = "default";
     private static final Duration TIMEOUT = Duration.ofSeconds(30);
