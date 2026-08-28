@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 @QuarkusTest
-@QuarkusTestResource(KindVersityTestResource.class)
+@QuarkusTestResource(K3sVersityTestResource.class)
 class VersityProviderE2ETest {
     private static final String ROOT_ACCESS = "test-root-access";
     private static final String ROOT_SECRET = "test-root-secret";
