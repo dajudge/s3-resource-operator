@@ -200,7 +200,7 @@
             <param>XML</param>
           </outputFormats>
           <timestampedReports>false</timestampedReports>
-          <failWhenNoMutations>false</failWhenNoMutations>
+          <failWhenNoMutations>true</failWhenNoMutations>
           <mutationThreshold>95</mutationThreshold>
           <coverageThreshold>90</coverageThreshold>
         </configuration>
