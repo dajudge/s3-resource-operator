@@ -200,9 +200,9 @@
             <param>XML</param>
           </outputFormats>
           <timestampedReports>false</timestampedReports>
-          <failWhenNoMutations>false</failWhenNoMutations>
-          <mutationThreshold>0</mutationThreshold>
-          <coverageThreshold>0</coverageThreshold>
+          <failWhenNoMutations>true</failWhenNoMutations>
+          <mutationThreshold>95</mutationThreshold>
+          <coverageThreshold>90</coverageThreshold>
         </configuration>
       </plugin>
       <plugin>
