@@ -50,115 +50,127 @@ class OperatorE2ETest {
 
     @Test
     void reconcilesResourcesAndEnforcesLifecycleSemantics() {
+        ReadyResources ready = createReadyResources();
+        try (S3Client s3 = s3(ready.accessKey(), ready.secretKey())) {
+            verifyObjectAccess(s3);
+            verifyUpdatesPreserveTransitionTimes(s3, ready);
+            verifyDeletionSemantics(s3);
+        }
+        verifyCleanupWithoutBackend();
+        verifyCleanupWithoutAdminSecret();
+    }
+
+    private ReadyResources createReadyResources() {
         createAdminSecret();
         createBackend("home", "versity-admin");
         createBackend("backend-to-delete", "versity-admin");
         createUser("e2e-user", "home");
         Secret credentials = awaitSecret("e2e-user-s3");
-        String accessKey = secretValue(credentials, "accessKey");
-        String secretKey = secretValue(credentials, "secretKey");
-        S3User readyUser = awaitUserReady("e2e-user");
-        String originalUserTransition =
-                readyUser.getStatus().getConditions().getFirst().getLastTransitionTime();
+        S3User user = awaitUserReady("e2e-user");
         createBucket("e2e-bucket", "home", "e2e-user", S3BucketSpec.DeletionPolicy.RETAIN);
         createBucket("delete-me", "home", "e2e-user", S3BucketSpec.DeletionPolicy.DELETE);
-        S3Bucket readyBucket = awaitBucketReady("e2e-bucket");
-        String originalBucketTransition =
-                readyBucket.getStatus().getConditions().getFirst().getLastTransitionTime();
+        S3Bucket bucket = awaitBucketReady("e2e-bucket");
         awaitBucketReady("delete-me");
+        return new ReadyResources(
+                secretValue(credentials, "accessKey"),
+                secretValue(credentials, "secretKey"),
+                user,
+                bucket,
+                user.getStatus().getConditions().getFirst().getLastTransitionTime(),
+                bucket.getStatus().getConditions().getFirst().getLastTransitionTime());
+    }
 
-        try (S3Client s3 = s3(accessKey, secretKey)) {
-            String key = "hello.txt";
-            String payload = "hello from the real operator";
-            await().atMost(TIMEOUT)
-                    .ignoreExceptions()
-                    .untilAsserted(() -> s3.putObject(
-                            PutObjectRequest.builder()
-                                    .bucket("e2e-bucket")
-                                    .key(key)
-                                    .build(),
-                            RequestBody.fromString(payload, StandardCharsets.UTF_8)));
-            await().atMost(TIMEOUT)
-                    .ignoreExceptions()
-                    .untilAsserted(() -> s3.headBucket(
-                            HeadBucketRequest.builder().bucket("delete-me").build()));
-            assertThat(s3.getObjectAsBytes(GetObjectRequest.builder()
-                                    .bucket("e2e-bucket")
-                                    .key(key)
-                                    .build())
-                            .asUtf8String())
-                    .isEqualTo(payload);
+    private void verifyObjectAccess(S3Client s3) {
+        String key = "hello.txt";
+        String payload = "hello from the real operator";
+        await().atMost(TIMEOUT)
+                .ignoreExceptions()
+                .untilAsserted(() -> s3.putObject(
+                        PutObjectRequest.builder().bucket("e2e-bucket").key(key).build(),
+                        RequestBody.fromString(payload, StandardCharsets.UTF_8)));
+        await().atMost(TIMEOUT)
+                .ignoreExceptions()
+                .untilAsserted(() -> s3.headBucket(
+                        HeadBucketRequest.builder().bucket("delete-me").build()));
+        assertThat(s3.getObjectAsBytes(GetObjectRequest.builder()
+                                .bucket("e2e-bucket")
+                                .key(key)
+                                .build())
+                        .asUtf8String())
+                .isEqualTo(payload);
+    }
 
-            client.resources(S3User.class)
+    private void verifyUpdatesPreserveTransitionTimes(S3Client s3, ReadyResources ready) {
+        client.resources(S3User.class)
+                .inNamespace(NAMESPACE)
+                .withName("e2e-user")
+                .edit(user -> {
+                    user.getSpec().setRole("admin");
+                    return user;
+                });
+        client.resources(S3Bucket.class)
+                .inNamespace(NAMESPACE)
+                .withName("e2e-bucket")
+                .edit(bucket -> {
+                    bucket.getSpec().setDeletionPolicy(S3BucketSpec.DeletionPolicy.DELETE);
+                    return bucket;
+                });
+        await().atMost(TIMEOUT).untilAsserted(() -> assertUpdatedResources(s3, ready));
+        client.resources(S3Bucket.class)
+                .inNamespace(NAMESPACE)
+                .withName("e2e-bucket")
+                .edit(bucket -> {
+                    bucket.getSpec().setDeletionPolicy(S3BucketSpec.DeletionPolicy.RETAIN);
+                    return bucket;
+                });
+        awaitBucketReady("e2e-bucket");
+    }
+
+    private void assertUpdatedResources(S3Client s3, ReadyResources ready) {
+        S3User reconciledUser = awaitUserReady("e2e-user");
+        S3Bucket reconciledBucket = awaitBucketReady("e2e-bucket");
+        assertThat(reconciledUser.getMetadata().getGeneration())
+                .isGreaterThan(ready.user().getMetadata().getGeneration());
+        assertThat(reconciledBucket.getMetadata().getGeneration())
+                .isGreaterThan(ready.bucket().getMetadata().getGeneration());
+        assertThat(reconciledUser.getStatus().getConditions().getFirst().getLastTransitionTime())
+                .isEqualTo(ready.userTransition());
+        assertThat(reconciledBucket.getStatus().getConditions().getFirst().getLastTransitionTime())
+                .isEqualTo(ready.bucketTransition());
+        s3.headBucket(HeadBucketRequest.builder().bucket("e2e-bucket").build());
+    }
+
+    private void verifyDeletionSemantics(S3Client s3) {
+        client.resources(S3User.class)
+                .inNamespace(NAMESPACE)
+                .withName("e2e-user")
+                .delete();
+        await().during(Duration.ofSeconds(1)).atMost(TIMEOUT).untilAsserted(() -> {
+            S3User terminating = client.resources(S3User.class)
                     .inNamespace(NAMESPACE)
                     .withName("e2e-user")
-                    .edit(user -> {
-                        user.getSpec().setRole("admin");
-                        return user;
-                    });
-            client.resources(S3Bucket.class)
-                    .inNamespace(NAMESPACE)
-                    .withName("e2e-bucket")
-                    .edit(bucket -> {
-                        bucket.getSpec().setDeletionPolicy(S3BucketSpec.DeletionPolicy.DELETE);
-                        return bucket;
-                    });
-            await().atMost(TIMEOUT).untilAsserted(() -> {
-                S3User reconciledUser = awaitUserReady("e2e-user");
-                S3Bucket reconciledBucket = awaitBucketReady("e2e-bucket");
-                assertThat(reconciledUser.getMetadata().getGeneration())
-                        .isGreaterThan(readyUser.getMetadata().getGeneration());
-                assertThat(reconciledBucket.getMetadata().getGeneration())
-                        .isGreaterThan(readyBucket.getMetadata().getGeneration());
-                assertThat(reconciledUser.getStatus().getConditions().getFirst().getLastTransitionTime())
-                        .isEqualTo(originalUserTransition);
-                assertThat(reconciledBucket
-                                .getStatus()
-                                .getConditions()
-                                .getFirst()
-                                .getLastTransitionTime())
-                        .isEqualTo(originalBucketTransition);
-                s3.headBucket(HeadBucketRequest.builder().bucket("e2e-bucket").build());
-            });
-            client.resources(S3Bucket.class)
-                    .inNamespace(NAMESPACE)
-                    .withName("e2e-bucket")
-                    .edit(bucket -> {
-                        bucket.getSpec().setDeletionPolicy(S3BucketSpec.DeletionPolicy.RETAIN);
-                        return bucket;
-                    });
-            awaitBucketReady("e2e-bucket");
+                    .get();
+            assertThat(terminating).isNotNull();
+            assertThat(terminating.getMetadata().getDeletionTimestamp()).isNotNull();
+        });
+        client.resources(S3Bucket.class)
+                .inNamespace(NAMESPACE)
+                .withName("delete-me")
+                .delete();
+        awaitResourceDeleted(S3Bucket.class, "delete-me");
+        await().atMost(TIMEOUT).until(() -> backendBucketMissing(s3, "delete-me"));
+        client.resources(S3Bucket.class)
+                .inNamespace(NAMESPACE)
+                .withName("e2e-bucket")
+                .delete();
+        awaitResourceDeleted(S3Bucket.class, "e2e-bucket");
+        s3.headBucket(HeadBucketRequest.builder().bucket("e2e-bucket").build());
+        client.secrets().inNamespace(NAMESPACE).withName("e2e-user-s3").delete();
+        awaitResourceDeleted(S3User.class, "e2e-user");
+        await().atMost(TIMEOUT).until(() -> credentialsRejected(s3, "e2e-bucket"));
+    }
 
-            client.resources(S3User.class)
-                    .inNamespace(NAMESPACE)
-                    .withName("e2e-user")
-                    .delete();
-            await().during(Duration.ofSeconds(1)).atMost(TIMEOUT).untilAsserted(() -> {
-                S3User terminating = client.resources(S3User.class)
-                        .inNamespace(NAMESPACE)
-                        .withName("e2e-user")
-                        .get();
-                assertThat(terminating).isNotNull();
-                assertThat(terminating.getMetadata().getDeletionTimestamp()).isNotNull();
-            });
-
-            client.resources(S3Bucket.class)
-                    .inNamespace(NAMESPACE)
-                    .withName("delete-me")
-                    .delete();
-            awaitResourceDeleted(S3Bucket.class, "delete-me");
-            await().atMost(TIMEOUT).until(() -> backendBucketMissing(s3, "delete-me"));
-            client.resources(S3Bucket.class)
-                    .inNamespace(NAMESPACE)
-                    .withName("e2e-bucket")
-                    .delete();
-            awaitResourceDeleted(S3Bucket.class, "e2e-bucket");
-            s3.headBucket(HeadBucketRequest.builder().bucket("e2e-bucket").build());
-            client.secrets().inNamespace(NAMESPACE).withName("e2e-user-s3").delete();
-            awaitResourceDeleted(S3User.class, "e2e-user");
-            await().atMost(TIMEOUT).until(() -> credentialsRejected(s3, "e2e-bucket"));
-        }
-
+    private void verifyCleanupWithoutBackend() {
         createUser("backend-missing-user", "backend-to-delete");
         awaitUserReady("backend-missing-user");
         client.resources(S3Backend.class)
@@ -171,7 +183,9 @@ class OperatorE2ETest {
                 .withName("backend-missing-user")
                 .delete();
         awaitResourceDeleted(S3User.class, "backend-missing-user");
+    }
 
+    private void verifyCleanupWithoutAdminSecret() {
         createAdminSecret("temporary-admin");
         createBackend("admin-missing", "temporary-admin");
         createUser("admin-missing-user", "admin-missing");
@@ -190,6 +204,14 @@ class OperatorE2ETest {
                 .delete();
         awaitResourceDeleted(S3User.class, "admin-missing-user");
     }
+
+    private record ReadyResources(
+            String accessKey,
+            String secretKey,
+            S3User user,
+            S3Bucket bucket,
+            String userTransition,
+            String bucketTransition) {}
 
     private S3Client s3(String accessKey, String secretKey) {
         return S3Client.builder()
