@@ -190,10 +190,12 @@
           <targetClasses>
             <param>com.dajudge.s3operator.reconciler.ResourceValidation*</param>
             <param>com.dajudge.s3operator.reconciler.ReconcilerSupport*</param>
+            <param>com.dajudge.s3operator.reconciler.S3UserReconciler*</param>
           </targetClasses>
           <targetTests>
             <param>com.dajudge.s3operator.reconciler.ResourceValidationTest*</param>
             <param>com.dajudge.s3operator.reconciler.ReconcilerSupportTest*</param>
+            <param>com.dajudge.s3operator.*E2ETest*</param>
           </targetTests>
           <outputFormats>
             <param>HTML</param>
