@@ -1,5 +1,11 @@
 # s3-resource-operator
 
+[![CI](https://github.com/dajudge/s3-resource-operator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/dajudge/s3-resource-operator/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/dajudge/s3-resource-operator/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/dajudge/s3-resource-operator/actions/workflows/codeql.yml)
+[![Published release E2E](https://github.com/dajudge/s3-resource-operator/actions/workflows/published-release-e2e.yml/badge.svg?branch=main)](https://github.com/dajudge/s3-resource-operator/actions/workflows/published-release-e2e.yml)
+[![GitHub Release](https://img.shields.io/github/v/release/dajudge/s3-resource-operator?display_name=release&sort=semver)](https://github.com/dajudge/s3-resource-operator/releases/latest)
+[![License](https://img.shields.io/github/license/dajudge/s3-resource-operator)](LICENSE)
+
 Kubernetes operator for declarative S3 users and buckets.
 
 ## Status
