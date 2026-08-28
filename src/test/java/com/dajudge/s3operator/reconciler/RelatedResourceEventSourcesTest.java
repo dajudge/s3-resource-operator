@@ -32,6 +32,8 @@ class RelatedResourceEventSourcesTest {
         KubernetesClient client = mock(KubernetesClient.class);
         EventSourceContext<S3User> userContext = mock(EventSourceContext.class);
         EventSourceContext<S3Bucket> bucketContext = mock(EventSourceContext.class);
+        when(userContext.getClient()).thenReturn(client);
+        when(bucketContext.getClient()).thenReturn(client);
 
         assertThat(RelatedResourceEventSources.forUser(client, userContext)).hasSize(2);
         assertThat(RelatedResourceEventSources.forBucket(client, bucketContext)).hasSize(3);
@@ -94,8 +96,7 @@ class RelatedResourceEventSourcesTest {
         S3Bucket bucket = bucket("photos", NS);
         stubResourceGet(client, S3User.class, "alice", user("alice", NS, "custom-user-secret"));
 
-        assertThat(RelatedResourceEventSources.secretAffectsBucket(
-                        client, secret("custom-user-secret", NS), bucket))
+        assertThat(RelatedResourceEventSources.secretAffectsBucket(client, secret("custom-user-secret", NS), bucket))
                 .isTrue();
     }
 
@@ -137,7 +138,8 @@ class RelatedResourceEventSourcesTest {
         spec.setEndpoint("http://versity:7070");
         spec.setAdminCredentialsSecretRef(ref);
         S3Backend backend = new S3Backend();
-        backend.setMetadata(new ObjectMetaBuilder().withName("backend").withNamespace(NS).build());
+        backend.setMetadata(
+                new ObjectMetaBuilder().withName("backend").withNamespace(NS).build());
         backend.setSpec(spec);
         return backend;
     }
@@ -147,7 +149,8 @@ class RelatedResourceEventSourcesTest {
         spec.setBackendRef("backend");
         spec.setSecretName(secretName);
         S3User user = new S3User();
-        user.setMetadata(new ObjectMetaBuilder().withName(name).withNamespace(namespace).build());
+        user.setMetadata(
+                new ObjectMetaBuilder().withName(name).withNamespace(namespace).build());
         user.setSpec(spec);
         return user;
     }
@@ -157,7 +160,8 @@ class RelatedResourceEventSourcesTest {
         spec.setBackendRef("backend");
         spec.setUserRef("alice");
         S3Bucket bucket = new S3Bucket();
-        bucket.setMetadata(new ObjectMetaBuilder().withName(name).withNamespace(namespace).build());
+        bucket.setMetadata(
+                new ObjectMetaBuilder().withName(name).withNamespace(namespace).build());
         bucket.setSpec(spec);
         return bucket;
     }
