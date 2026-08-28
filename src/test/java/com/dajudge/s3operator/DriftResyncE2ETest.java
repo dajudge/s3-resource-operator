@@ -1,21 +1,20 @@
 package com.dajudge.s3operator;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
+
 import com.dajudge.s3operator.provider.VersityS3Provider;
 import io.fabric8.kubernetes.api.model.Secret;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
+import java.time.Duration;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
-
-import java.time.Duration;
-import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.awaitility.Awaitility.await;
 
 @QuarkusTest
 @QuarkusTestResource(K3sVersityTestResource.class)
@@ -37,7 +36,8 @@ class DriftResyncE2ETest extends OperatorE2ETestSupport {
         try (S3Client s3 = s3(accessKey, secretKey)) {
             s3.headBucket(HeadBucketRequest.builder().bucket("drift-bucket").build());
             new VersityS3Provider().deleteBucket(endpoint, ROOT_ACCESS, ROOT_SECRET, "drift-bucket");
-            assertThatThrownBy(() -> s3.headBucket(HeadBucketRequest.builder().bucket("drift-bucket").build()))
+            assertThatThrownBy(() -> s3.headBucket(
+                            HeadBucketRequest.builder().bucket("drift-bucket").build()))
                     .isInstanceOf(S3Exception.class);
             await().ignoreExceptions().atMost(Duration.ofSeconds(10)).until(() -> {
                 s3.headBucket(HeadBucketRequest.builder().bucket("drift-bucket").build());

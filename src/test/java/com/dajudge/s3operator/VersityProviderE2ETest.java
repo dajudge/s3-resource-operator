@@ -1,8 +1,13 @@
 package com.dajudge.s3operator;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
+
 import com.dajudge.s3operator.provider.VersityS3Provider;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
+import java.net.URI;
+import java.time.Duration;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -13,12 +18,6 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
-
-import java.net.URI;
-import java.time.Duration;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.awaitility.Awaitility.await;
 
 @QuarkusTest
 @QuarkusTestResource(K3sVersityTestResource.class)
@@ -51,8 +50,9 @@ class VersityProviderE2ETest {
         }
 
         try (S3Client stale = s3(access, initialSecret)) {
-            await().atMost(Duration.ofSeconds(30)).untilAsserted(() ->
-                    assertThat(credentialsRejected(stale, bucket)).isTrue());
+            await().atMost(Duration.ofSeconds(30))
+                    .untilAsserted(
+                            () -> assertThat(credentialsRejected(stale, bucket)).isTrue());
         } finally {
             provider.deleteBucket(endpoint, ROOT_ACCESS, ROOT_SECRET, bucket);
             provider.deleteUser(endpoint, ROOT_ACCESS, ROOT_SECRET, access);
@@ -83,8 +83,9 @@ class VersityProviderE2ETest {
         }
 
         try (S3Client formerOwner = s3(firstAccess, firstSecret)) {
-            await().atMost(Duration.ofSeconds(30)).untilAsserted(() ->
-                    assertThat(credentialsRejected(formerOwner, bucket)).isTrue());
+            await().atMost(Duration.ofSeconds(30))
+                    .untilAsserted(() ->
+                            assertThat(credentialsRejected(formerOwner, bucket)).isTrue());
         } finally {
             provider.deleteBucket(endpoint, ROOT_ACCESS, ROOT_SECRET, bucket);
             provider.deleteUser(endpoint, ROOT_ACCESS, ROOT_SECRET, firstAccess);
@@ -97,14 +98,17 @@ class VersityProviderE2ETest {
                 .endpointOverride(URI.create(endpoint))
                 .region(Region.US_EAST_1)
                 .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(access, secret)))
-                .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
+                .serviceConfiguration(
+                        S3Configuration.builder().pathStyleAccessEnabled(true).build())
                 .httpClientBuilder(UrlConnectionHttpClient.builder())
                 .build();
     }
 
     private static void awaitAccessible(S3Client s3, String bucket) {
-        await().atMost(Duration.ofSeconds(30)).ignoreExceptions().untilAsserted(() ->
-                s3.headBucket(HeadBucketRequest.builder().bucket(bucket).build()));
+        await().atMost(Duration.ofSeconds(30))
+                .ignoreExceptions()
+                .untilAsserted(() ->
+                        s3.headBucket(HeadBucketRequest.builder().bucket(bucket).build()));
     }
 
     private static boolean credentialsRejected(S3Client s3, String bucket) {
