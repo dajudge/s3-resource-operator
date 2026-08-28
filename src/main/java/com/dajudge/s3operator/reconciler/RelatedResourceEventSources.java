@@ -13,6 +13,7 @@ import io.javaoperatorsdk.operator.processing.event.source.EventSource;
 import io.javaoperatorsdk.operator.processing.event.source.informer.InformerEventSource;
 import java.util.List;
 import java.util.Set;
+import java.util.function.BiPredicate;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -40,6 +41,11 @@ final class RelatedResourceEventSources {
                 .collect(Collectors.toSet());
     }
 
+    private static <S extends HasMetadata, P extends HasMetadata> Function<S, Set<ResourceID>> mapper(
+            EventSourceContext<P> context, BiPredicate<P, S> predicate) {
+        return secondary -> matching(context, primary -> predicate.test(primary, secondary));
+    }
+
     static List<EventSource<?, S3User>> forUser(KubernetesClient client, EventSourceContext<S3User> context) {
         var backends = informer(S3Backend.class, S3User.class, context, userBackendMapper(context));
         var secrets = informer(Secret.class, S3User.class, context, userSecretMapper(client, context));
@@ -54,23 +60,25 @@ final class RelatedResourceEventSources {
     }
 
     static Function<S3Backend, Set<ResourceID>> userBackendMapper(EventSourceContext<S3User> context) {
-        return backend -> matching(
+        return mapper(
                 context,
-                user -> ResourceValidation.hasUsableUserSpec(user)
+                (user, backend) -> ResourceValidation.hasUsableUserSpec(user)
                         && sameNamespace(user, backend)
                         && backend.getMetadata().getName().equals(user.getSpec().getBackendRef()));
     }
 
     static Function<Secret, Set<ResourceID>> userSecretMapper(
             KubernetesClient client, EventSourceContext<S3User> context) {
-        return secret -> matching(
-                context, user -> ResourceValidation.hasUsableUserSpec(user) && secretAffectsUser(client, secret, user));
+        return mapper(
+                context,
+                (user, secret) ->
+                        ResourceValidation.hasUsableUserSpec(user) && secretAffectsUser(client, secret, user));
     }
 
     static Function<S3Backend, Set<ResourceID>> bucketBackendMapper(EventSourceContext<S3Bucket> context) {
-        return backend -> matching(
+        return mapper(
                 context,
-                bucket -> ResourceValidation.hasUsableBucketSpec(bucket)
+                (bucket, backend) -> ResourceValidation.hasUsableBucketSpec(bucket)
                         && sameNamespace(bucket, backend)
                         && backend.getMetadata()
                                 .getName()
@@ -78,18 +86,18 @@ final class RelatedResourceEventSources {
     }
 
     static Function<S3User, Set<ResourceID>> bucketUserMapper(EventSourceContext<S3Bucket> context) {
-        return user -> matching(
+        return mapper(
                 context,
-                bucket -> ResourceValidation.hasUsableBucketSpec(bucket)
+                (bucket, user) -> ResourceValidation.hasUsableBucketSpec(bucket)
                         && sameNamespace(bucket, user)
                         && user.getMetadata().getName().equals(bucket.getSpec().getUserRef()));
     }
 
     static Function<Secret, Set<ResourceID>> bucketSecretMapper(
             KubernetesClient client, EventSourceContext<S3Bucket> context) {
-        return secret -> matching(
+        return mapper(
                 context,
-                bucket ->
+                (bucket, secret) ->
                         ResourceValidation.hasUsableBucketSpec(bucket) && secretAffectsBucket(client, secret, bucket));
     }
 
