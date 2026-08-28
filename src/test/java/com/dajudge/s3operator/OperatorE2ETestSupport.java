@@ -6,6 +6,7 @@ import com.dajudge.s3operator.api.S3Bucket;
 import com.dajudge.s3operator.api.S3BucketSpec;
 import com.dajudge.s3operator.api.S3User;
 import com.dajudge.s3operator.api.S3UserSpec;
+import io.fabric8.kubernetes.api.model.LocalObjectReference;
 import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
 import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.api.model.SecretBuilder;
@@ -41,7 +42,7 @@ abstract class OperatorE2ETestSupport {
     }
 
     protected void createBackend(String name, String adminSecretName) {
-        S3BackendSpec.SecretRef ref = new S3BackendSpec.SecretRef();
+        LocalObjectReference ref = new LocalObjectReference();
         ref.setName(adminSecretName);
         S3BackendSpec spec = new S3BackendSpec();
         spec.setEndpoint(endpoint);

@@ -6,6 +6,7 @@ import com.dajudge.s3operator.api.S3Bucket;
 import com.dajudge.s3operator.api.S3BucketSpec;
 import com.dajudge.s3operator.api.S3User;
 import com.dajudge.s3operator.api.S3UserSpec;
+import io.fabric8.kubernetes.api.model.LocalObjectReference;
 import org.junit.jupiter.api.Test;
 
 import static com.dajudge.s3operator.reconciler.ReconciliationException.Reason.INVALID_SPEC;
@@ -97,7 +98,7 @@ class ResourceValidationTest {
         S3Backend backend = new S3Backend();
         S3BackendSpec spec = new S3BackendSpec();
         spec.setEndpoint(endpoint);
-        S3BackendSpec.SecretRef secretRef = new S3BackendSpec.SecretRef();
+        LocalObjectReference secretRef = new LocalObjectReference();
         secretRef.setName(secretName);
         spec.setAdminCredentialsSecretRef(secretRef);
         backend.setSpec(spec);
