@@ -203,6 +203,28 @@ jobs:
           path: target/pit-reports/**
           if-no-files-found: warn
 
+  event-source-mutation-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Run focused event-source PIT tests
+        run: >-
+          mvn --batch-mode --no-transfer-progress -Punit-tests test-compile
+          org.pitest:pitest-maven:mutationCoverage
+          -DtargetClasses=com.dajudge.s3operator.reconciler.RelatedResourceEventSources*
+          -DtargetTests=com.dajudge.s3operator.reconciler.RelatedResourceEventSourcesTest*
+
   native-build:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -266,6 +288,7 @@ jobs:
       - licenses
       - helm
       - mutation-test
+      - event-source-mutation-test
       - native-build
 
     steps:
@@ -278,4 +301,5 @@ jobs:
           test "${{ needs.licenses.result }}" = success
           test "${{ needs.helm.result }}" = success
           test "${{ needs.mutation-test.result }}" = success
+          test "${{ needs.event-source-mutation-test.result }}" = success
           test "${{ needs.native-build.result }}" = success
