@@ -41,6 +41,36 @@ class RelatedResourceEventSourcesTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void configuredMappersSelectAffectedPrimaries() {
+        KubernetesClient client = mock(KubernetesClient.class);
+        S3Backend backend = backend("admin");
+        S3User user = user("alice", NS, null);
+        S3Bucket bucket = bucket("photos", NS);
+        Secret admin = secret("admin", NS);
+
+        EventSourceContext<S3User> userContext = mock(EventSourceContext.class, RETURNS_DEEP_STUBS);
+        when(userContext.getPrimaryCache().list()).thenAnswer(ignored -> Stream.of(user));
+        stubResourceGet(client, S3Backend.class, "backend", backend);
+
+        assertThat(RelatedResourceEventSources.userBackendMapper(userContext).apply(backend))
+                .containsExactly(ResourceID.fromResource(user));
+        assertThat(RelatedResourceEventSources.userSecretMapper(client, userContext).apply(admin))
+                .containsExactly(ResourceID.fromResource(user));
+
+        EventSourceContext<S3Bucket> bucketContext = mock(EventSourceContext.class, RETURNS_DEEP_STUBS);
+        when(bucketContext.getPrimaryCache().list()).thenAnswer(ignored -> Stream.of(bucket));
+        stubResourceGet(client, S3User.class, "alice", user);
+
+        assertThat(RelatedResourceEventSources.bucketBackendMapper(bucketContext).apply(backend))
+                .containsExactly(ResourceID.fromResource(bucket));
+        assertThat(RelatedResourceEventSources.bucketUserMapper(bucketContext).apply(user))
+                .containsExactly(ResourceID.fromResource(bucket));
+        assertThat(RelatedResourceEventSources.bucketSecretMapper(client, bucketContext).apply(admin))
+                .containsExactly(ResourceID.fromResource(bucket));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void matchingReturnsOnlyPrimaryResourcesAcceptedByPredicate() {
         EventSourceContext<S3User> context = mock(EventSourceContext.class, RETURNS_DEEP_STUBS);
         S3User alice = user("alice", NS, null);
