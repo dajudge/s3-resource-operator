@@ -71,8 +71,8 @@ final class RelatedResourceEventSources {
             KubernetesClient client, EventSourceContext<S3User> context) {
         return mapper(
                 context,
-                (user, secret) -> ResourceValidation.hasUsableUserSpec(user)
-                        && secretAffectsUser(client, secret, user));
+                (user, secret) ->
+                        ResourceValidation.hasUsableUserSpec(user) && secretAffectsUser(client, secret, user));
     }
 
     static Function<S3Backend, Set<ResourceID>> bucketBackendMapper(EventSourceContext<S3Bucket> context) {
@@ -97,8 +97,8 @@ final class RelatedResourceEventSources {
             KubernetesClient client, EventSourceContext<S3Bucket> context) {
         return mapper(
                 context,
-                (bucket, secret) -> ResourceValidation.hasUsableBucketSpec(bucket)
-                        && secretAffectsBucket(client, secret, bucket));
+                (bucket, secret) ->
+                        ResourceValidation.hasUsableBucketSpec(bucket) && secretAffectsBucket(client, secret, bucket));
     }
 
     static boolean secretAffectsUser(KubernetesClient client, Secret secret, S3User user) {
