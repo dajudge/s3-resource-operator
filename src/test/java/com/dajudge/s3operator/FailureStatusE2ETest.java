@@ -1,35 +1,24 @@
 package com.dajudge.s3operator;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
+
 import com.dajudge.s3operator.api.S3Backend;
 import com.dajudge.s3operator.api.S3BackendSpec;
 import com.dajudge.s3operator.api.S3Bucket;
-import com.dajudge.s3operator.api.S3BucketSpec;
 import com.dajudge.s3operator.api.S3User;
-import com.dajudge.s3operator.api.S3UserSpec;
 import io.fabric8.kubernetes.api.model.Condition;
 import io.fabric8.kubernetes.api.model.LocalObjectReference;
 import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
 import io.fabric8.kubernetes.api.model.SecretBuilder;
-import io.fabric8.kubernetes.client.KubernetesClient;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.junit.jupiter.api.Test;
-
 import java.time.Duration;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.awaitility.Awaitility.await;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 @QuarkusTestResource(KindVersityTestResource.class)
-class FailureStatusE2ETest {
-    private static final String NS = "default";
-    private static final Duration TIMEOUT = Duration.ofSeconds(30);
-
-    @Inject KubernetesClient client;
-    @ConfigProperty(name = "test.s3.endpoint") String endpoint;
+class FailureStatusE2ETest extends OperatorE2ETestSupport {
 
     @Test
     void reportsMissingDependenciesAndRecovers() {
@@ -57,8 +46,15 @@ class FailureStatusE2ETest {
         createUser("provider-error-user", "provider-error-user-backend");
         awaitUserCondition("provider-error-user", "False", "ProviderError");
         createBackend("invalid-admin-user-backend", "versity", endpoint, "invalid-user-admin");
-        client.secrets().resource(new SecretBuilder().withNewMetadata().withName("invalid-user-admin").withNamespace(NS).endMetadata()
-                .addToStringData("accessKey", "test-root-access").build()).create();
+        client.secrets()
+                .resource(new SecretBuilder()
+                        .withNewMetadata()
+                        .withName("invalid-user-admin")
+                        .withNamespace(NS)
+                        .endMetadata()
+                        .addToStringData("accessKey", ROOT_ACCESS)
+                        .build())
+                .create();
         createUser("invalid-admin-user", "invalid-admin-user-backend");
         awaitUserCondition("invalid-admin-user", "False", "InvalidCredentialsSecret");
     }
@@ -82,8 +78,15 @@ class FailureStatusE2ETest {
         createBucket("missing-user-credentials-bucket", "bucket-good-backend", "blocked-owner");
         awaitBucketCondition("missing-user-credentials-bucket", "False", "UserCredentialsNotFound");
         createBackend("invalid-admin-bucket-backend", "versity", endpoint, "invalid-bucket-admin");
-        client.secrets().resource(new SecretBuilder().withNewMetadata().withName("invalid-bucket-admin").withNamespace(NS).endMetadata()
-                .addToStringData("accessKey", "test-root-access").build()).create();
+        client.secrets()
+                .resource(new SecretBuilder()
+                        .withNewMetadata()
+                        .withName("invalid-bucket-admin")
+                        .withNamespace(NS)
+                        .endMetadata()
+                        .addToStringData("accessKey", ROOT_ACCESS)
+                        .build())
+                .create();
         createBucket("invalid-admin-bucket", "invalid-admin-bucket-backend", "bucket-owner");
         awaitBucketCondition("invalid-admin-bucket", "False", "InvalidCredentialsSecret");
         createBackend("missing-admin-bucket-backend", "versity", endpoint, "missing-bucket-admin");
@@ -94,11 +97,6 @@ class FailureStatusE2ETest {
         awaitBucketCondition("provider-error-bucket", "False", "ProviderError");
     }
 
-    private void createAdminSecret(String name) {
-        client.secrets().resource(new SecretBuilder().withNewMetadata().withName(name).withNamespace(NS).endMetadata()
-                .addToStringData("accessKey", "test-root-access").addToStringData("secretKey", "test-root-secret").build()).create();
-    }
-
     private void createBackend(String name, String provider, String backendEndpoint, String adminSecretName) {
         LocalObjectReference ref = new LocalObjectReference();
         ref.setName(adminSecretName);
@@ -107,45 +105,28 @@ class FailureStatusE2ETest {
         spec.setEndpoint(backendEndpoint);
         spec.setAdminCredentialsSecretRef(ref);
         S3Backend backend = new S3Backend();
-        backend.setMetadata(new ObjectMetaBuilder().withName(name).withNamespace(NS).build());
+        backend.setMetadata(
+                new ObjectMetaBuilder().withName(name).withNamespace(NS).build());
         backend.setSpec(spec);
         client.resources(S3Backend.class).inNamespace(NS).resource(backend).create();
-    }
-
-    private void createUser(String name, String backendRef) {
-        S3UserSpec spec = new S3UserSpec();
-        spec.setBackendRef(backendRef);
-        spec.setSecretName(name + "-s3");
-        S3User user = new S3User();
-        user.setMetadata(new ObjectMetaBuilder().withName(name).withNamespace(NS).build());
-        user.setSpec(spec);
-        client.resources(S3User.class).inNamespace(NS).resource(user).create();
-    }
-
-    private void createBucket(String name, String backendRef, String userRef) {
-        S3BucketSpec spec = new S3BucketSpec();
-        spec.setBackendRef(backendRef);
-        spec.setUserRef(userRef);
-        spec.setBucketName(name);
-        spec.setDeletionPolicy(S3BucketSpec.DeletionPolicy.RETAIN);
-        S3Bucket bucket = new S3Bucket();
-        bucket.setMetadata(new ObjectMetaBuilder().withName(name).withNamespace(NS).build());
-        bucket.setSpec(spec);
-        client.resources(S3Bucket.class).inNamespace(NS).resource(bucket).create();
     }
 
     private Condition awaitUserCondition(String name, String status, String reason) {
         final Condition[] result = new Condition[1];
         await().atMost(TIMEOUT).untilAsserted(() -> {
-            S3User user = client.resources(S3User.class).inNamespace(NS).withName(name).get();
+            S3User user = client.resources(S3User.class)
+                    .inNamespace(NS)
+                    .withName(name)
+                    .get();
             assertThat(user).isNotNull();
             assertThat(user.getStatus()).isNotNull();
-            assertThat(user.getStatus().getObservedGeneration()).isEqualTo(user.getMetadata().getGeneration());
-            Condition condition = user.getStatus().getConditions().stream().filter(c -> "Ready".equals(c.getType())).findFirst().orElseThrow();
-            assertThat(condition.getStatus()).isEqualTo(status);
-            assertThat(condition.getReason()).isEqualTo(reason);
-            assertThat(condition.getObservedGeneration()).isEqualTo(user.getMetadata().getGeneration());
-            assertThat(condition.getMessage()).isNotBlank();
+            assertThat(user.getStatus().getObservedGeneration())
+                    .isEqualTo(user.getMetadata().getGeneration());
+            Condition condition = user.getStatus().getConditions().stream()
+                    .filter(c -> "Ready".equals(c.getType()))
+                    .findFirst()
+                    .orElseThrow();
+            assertCondition(user, condition, status, reason);
             result[0] = condition;
         });
         return result[0];
@@ -154,37 +135,60 @@ class FailureStatusE2ETest {
     private Condition awaitBucketCondition(String name, String status, String reason) {
         final Condition[] result = new Condition[1];
         await().atMost(TIMEOUT).untilAsserted(() -> {
-            S3Bucket bucket = client.resources(S3Bucket.class).inNamespace(NS).withName(name).get();
+            S3Bucket bucket = client.resources(S3Bucket.class)
+                    .inNamespace(NS)
+                    .withName(name)
+                    .get();
             assertThat(bucket).isNotNull();
             assertThat(bucket.getStatus()).isNotNull();
-            assertThat(bucket.getStatus().getObservedGeneration()).isEqualTo(bucket.getMetadata().getGeneration());
-            Condition condition = bucket.getStatus().getConditions().stream().filter(c -> "Ready".equals(c.getType())).findFirst().orElseThrow();
-            assertThat(condition.getStatus()).isEqualTo(status);
-            assertThat(condition.getReason()).isEqualTo(reason);
-            assertThat(condition.getObservedGeneration()).isEqualTo(bucket.getMetadata().getGeneration());
-            assertThat(condition.getMessage()).isNotBlank();
+            assertThat(bucket.getStatus().getObservedGeneration())
+                    .isEqualTo(bucket.getMetadata().getGeneration());
+            Condition condition = bucket.getStatus().getConditions().stream()
+                    .filter(c -> "Ready".equals(c.getType()))
+                    .findFirst()
+                    .orElseThrow();
+            assertCondition(bucket, condition, status, reason);
             result[0] = condition;
         });
         return result[0];
     }
 
+    private static void assertCondition(
+            io.fabric8.kubernetes.api.model.HasMetadata resource, Condition condition, String status, String reason) {
+        assertThat(condition.getStatus()).isEqualTo(status);
+        assertThat(condition.getReason()).isEqualTo(reason);
+        assertThat(condition.getObservedGeneration())
+                .isEqualTo(resource.getMetadata().getGeneration());
+        assertThat(condition.getMessage()).isNotBlank();
+    }
+
     private void assertStableUserCondition(String name, Condition original) {
         await().during(Duration.ofSeconds(6)).atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
-            S3User user = client.resources(S3User.class).inNamespace(NS).withName(name).get();
-            Condition current = user.getStatus().getConditions().stream().filter(c -> "Ready".equals(c.getType())).findFirst().orElseThrow();
-            assertThat(current.getStatus()).isEqualTo(original.getStatus());
-            assertThat(current.getReason()).isEqualTo(original.getReason());
-            assertThat(current.getLastTransitionTime()).isEqualTo(original.getLastTransitionTime());
+            S3User user = client.resources(S3User.class)
+                    .inNamespace(NS)
+                    .withName(name)
+                    .get();
+            assertStableCondition(user.getStatus().getConditions(), original);
         });
     }
 
     private void assertStableBucketCondition(String name, Condition original) {
         await().during(Duration.ofSeconds(6)).atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
-            S3Bucket bucket = client.resources(S3Bucket.class).inNamespace(NS).withName(name).get();
-            Condition current = bucket.getStatus().getConditions().stream().filter(c -> "Ready".equals(c.getType())).findFirst().orElseThrow();
-            assertThat(current.getStatus()).isEqualTo(original.getStatus());
-            assertThat(current.getReason()).isEqualTo(original.getReason());
-            assertThat(current.getLastTransitionTime()).isEqualTo(original.getLastTransitionTime());
+            S3Bucket bucket = client.resources(S3Bucket.class)
+                    .inNamespace(NS)
+                    .withName(name)
+                    .get();
+            assertStableCondition(bucket.getStatus().getConditions(), original);
         });
+    }
+
+    private static void assertStableCondition(java.util.List<Condition> conditions, Condition original) {
+        Condition current = conditions.stream()
+                .filter(c -> "Ready".equals(c.getType()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(current.getStatus()).isEqualTo(original.getStatus());
+        assertThat(current.getReason()).isEqualTo(original.getReason());
+        assertThat(current.getLastTransitionTime()).isEqualTo(original.getLastTransitionTime());
     }
 }
