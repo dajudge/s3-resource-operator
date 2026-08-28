@@ -20,12 +20,11 @@ import io.javaoperatorsdk.operator.api.reconciler.UpdateControl;
 import io.javaoperatorsdk.operator.processing.event.source.EventSource;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import static com.dajudge.s3operator.reconciler.ReconciliationException.Reason.PROVIDER_ERROR;
 import static com.dajudge.s3operator.reconciler.ReconcilerSupport.requireAdminSecret;
@@ -86,14 +85,7 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
 
     @Override
     public List<EventSource<?, S3User>> prepareEventSources(EventSourceContext<S3User> context) {
-        var backends = RelatedResourceEventSources.informer(S3Backend.class, S3User.class, context,
-                backend -> RelatedResourceEventSources.matching(context, user -> ResourceValidation.hasUsableUserSpec(user)
-                        && sameNamespace(user, backend)
-                        && backend.getMetadata().getName().equals(user.getSpec().getBackendRef())));
-        var secrets = RelatedResourceEventSources.informer(Secret.class, S3User.class, context,
-                secret -> RelatedResourceEventSources.matching(context,
-                        user -> ResourceValidation.hasUsableUserSpec(user) && secretAffectsUser(secret, user)));
-        return List.of(backends, secrets);
+        return RelatedResourceEventSources.forUser(client, context);
     }
 
     @Override
@@ -124,19 +116,6 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
                     secretValue(adminSecret, "secretKey"), accessKey);
         }
         return DeleteControl.defaultDelete();
-    }
-
-    private boolean secretAffectsUser(Secret secret, S3User user) {
-        if (!sameNamespace(user, secret)) return false;
-        if (secret.getMetadata().getName().equals(secretName(user))) return true;
-        S3Backend backend = client.resources(S3Backend.class).inNamespace(user.getMetadata().getNamespace())
-                .withName(user.getSpec().getBackendRef()).get();
-        return ResourceValidation.hasUsableBackendSpec(backend)
-                && secret.getMetadata().getName().equals(backend.getSpec().getAdminCredentialsSecretRef().getName());
-    }
-
-    private static boolean sameNamespace(S3User user, io.fabric8.kubernetes.api.model.HasMetadata secondary) {
-        return user.getMetadata().getNamespace().equals(secondary.getMetadata().getNamespace());
     }
 
     private static S3UserStatus status(S3User user) {
