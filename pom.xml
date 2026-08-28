@@ -195,7 +195,7 @@
           <targetTests>
             <param>com.dajudge.s3operator.reconciler.ResourceValidationTest*</param>
             <param>com.dajudge.s3operator.reconciler.ReconcilerSupportTest*</param>
-            <param>com.dajudge.s3operator.*E2ETest*</param>
+            <param>com.dajudge.s3operator.reconciler.S3UserReconcilerTest*</param>
           </targetTests>
           <outputFormats>
             <param>HTML</param>
