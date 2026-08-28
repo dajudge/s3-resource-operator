@@ -28,8 +28,10 @@ import java.util.Base64;
 import java.util.List;
 
 import static com.dajudge.s3operator.reconciler.ReconciliationException.Reason.PROVIDER_ERROR;
+import static com.dajudge.s3operator.reconciler.ReconcilerSupport.defaultedName;
 import static com.dajudge.s3operator.reconciler.ReconcilerSupport.requireAdminSecret;
 import static com.dajudge.s3operator.reconciler.ReconcilerSupport.requireBackend;
+import static com.dajudge.s3operator.reconciler.ReconcilerSupport.sameNamespace;
 import static com.dajudge.s3operator.reconciler.ReconcilerSupport.secretValue;
 import static com.dajudge.s3operator.reconciler.ReconcilerSupport.transitionTime;
 
@@ -49,7 +51,7 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
             S3Backend backend = requireBackend(client, provider, namespace, user.getSpec().getBackendRef());
             Secret adminSecret = requireAdminSecret(client, namespace, backend);
 
-            String secretName = secretName(user);
+            String secretName = defaultedName(user.getSpec().getSecretName(), user.getMetadata().getName() + "-s3");
             Secret credentials = client.secrets().inNamespace(namespace).withName(secretName).get();
             if (credentials == null) {
                 String accessKey = namespace + "." + user.getMetadata().getName();
@@ -116,7 +118,8 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
                 .withName(backend.getSpec().getAdminCredentialsSecretRef().getName()).get();
         if (adminSecret == null) return DeleteControl.defaultDelete();
 
-        Secret credentials = client.secrets().inNamespace(namespace).withName(secretName(user)).get();
+        String credentialsName = defaultedName(user.getSpec().getSecretName(), user.getMetadata().getName() + "-s3");
+        Secret credentials = client.secrets().inNamespace(namespace).withName(credentialsName).get();
         String accessKey = credentials != null ? secretValue(credentials, "accessKey")
                 : user.getStatus() == null ? null : user.getStatus().getAccessKeyId();
         if (accessKey != null && !accessKey.isBlank()) {
@@ -128,15 +131,12 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
 
     private boolean secretAffectsUser(Secret secret, S3User user) {
         if (!sameNamespace(user, secret)) return false;
-        if (secret.getMetadata().getName().equals(secretName(user))) return true;
+        String credentialsName = defaultedName(user.getSpec().getSecretName(), user.getMetadata().getName() + "-s3");
+        if (secret.getMetadata().getName().equals(credentialsName)) return true;
         S3Backend backend = client.resources(S3Backend.class).inNamespace(user.getMetadata().getNamespace())
                 .withName(user.getSpec().getBackendRef()).get();
         return ResourceValidation.hasUsableBackendSpec(backend)
                 && secret.getMetadata().getName().equals(backend.getSpec().getAdminCredentialsSecretRef().getName());
-    }
-
-    private static boolean sameNamespace(S3User user, io.fabric8.kubernetes.api.model.HasMetadata secondary) {
-        return user.getMetadata().getNamespace().equals(secondary.getMetadata().getNamespace());
     }
 
     private static S3UserStatus status(S3User user) {
@@ -149,11 +149,6 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
                 .withMessage(message == null ? reason : message).withObservedGeneration(user.getMetadata().getGeneration())
                 .withLastTransitionTime(transitionTime(status.getConditions(), value, reason)).build()));
         user.setStatus(status);
-    }
-
-    private static String secretName(S3User user) {
-        return user.getSpec().getSecretName() == null || user.getSpec().getSecretName().isBlank()
-                ? user.getMetadata().getName() + "-s3" : user.getSpec().getSecretName();
     }
 
     private static String randomSecret() {
