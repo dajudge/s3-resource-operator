@@ -3,6 +3,7 @@ package com.dajudge.s3operator.reconciler;
 import com.dajudge.s3operator.api.S3Backend;
 import com.dajudge.s3operator.provider.VersityS3Provider;
 import io.fabric8.kubernetes.api.model.Condition;
+import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.client.KubernetesClient;
 
@@ -37,6 +38,14 @@ final class ReconcilerSupport {
             throw new ReconciliationException(ADMIN_CREDENTIALS_NOT_FOUND, "Admin credentials Secret not found");
         }
         return secret;
+    }
+
+    static boolean sameNamespace(HasMetadata primary, HasMetadata secondary) {
+        return primary.getMetadata().getNamespace().equals(secondary.getMetadata().getNamespace());
+    }
+
+    static String defaultedName(String configured, String fallback) {
+        return configured == null || configured.isBlank() ? fallback : configured;
     }
 
     static String transitionTime(List<Condition> conditions, String status, String reason) {
