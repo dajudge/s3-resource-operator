@@ -80,6 +80,31 @@ class ReconcilerSupportTest {
     }
 
     @Test
+    void comparesNamespacesAndDefaultsNames() {
+        Secret first = new SecretBuilder()
+                .withNewMetadata()
+                .withNamespace("first")
+                .endMetadata()
+                .build();
+        Secret same = new SecretBuilder()
+                .withNewMetadata()
+                .withNamespace("first")
+                .endMetadata()
+                .build();
+        Secret other = new SecretBuilder()
+                .withNewMetadata()
+                .withNamespace("other")
+                .endMetadata()
+                .build();
+
+        assertThat(ReconcilerSupport.sameNamespace(first, same)).isTrue();
+        assertThat(ReconcilerSupport.sameNamespace(first, other)).isFalse();
+        assertThat(ReconcilerSupport.defaultedName("configured", "fallback")).isEqualTo("configured");
+        assertThat(ReconcilerSupport.defaultedName(null, "fallback")).isEqualTo("fallback");
+        assertThat(ReconcilerSupport.defaultedName("   ", "fallback")).isEqualTo("fallback");
+    }
+
+    @Test
     void reusesTransitionTimeOnlyForSameReadyState() {
         String existing = "2026-08-28T10:00:00Z";
         var ready = new ConditionBuilder()
