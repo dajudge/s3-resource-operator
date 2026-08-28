@@ -85,7 +85,8 @@ public class KindVersityTestResource implements QuarkusTestResourceLifecycleMana
                         .build();
 
                 installCrds(client);
-                client.apps().deployments()
+                client.apps()
+                        .deployments()
                         .inNamespace("default")
                         .withName("versitygw")
                         .waitUntilReady(120, TimeUnit.SECONDS);
