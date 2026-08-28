@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
 @QuarkusTest
-@QuarkusTestResource(KindVersityTestResource.class)
+@QuarkusTestResource(K3sVersityTestResource.class)
 @TestProfile(DriftResyncE2ETest.FastResync.class)
 class DriftResyncE2ETest extends OperatorE2ETestSupport {
 
