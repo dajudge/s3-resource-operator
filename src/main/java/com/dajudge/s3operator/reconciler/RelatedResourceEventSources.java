@@ -41,59 +41,54 @@ final class RelatedResourceEventSources {
     }
 
     static List<EventSource<?, S3User>> forUser(KubernetesClient client, EventSourceContext<S3User> context) {
-        var backends = informer(
-                S3Backend.class,
-                S3User.class,
-                context,
-                backend -> matching(
-                        context,
-                        user -> ResourceValidation.hasUsableUserSpec(user)
-                                && sameNamespace(user, backend)
-                                && backend.getMetadata()
-                                        .getName()
-                                        .equals(user.getSpec().getBackendRef())));
-        var secrets = informer(
-                Secret.class,
-                S3User.class,
-                context,
-                secret -> matching(
-                        context,
-                        user -> ResourceValidation.hasUsableUserSpec(user) && secretAffectsUser(client, secret, user)));
+        var backends = informer(S3Backend.class, S3User.class, context, userBackendMapper(context));
+        var secrets = informer(Secret.class, S3User.class, context, userSecretMapper(client, context));
         return List.of(backends, secrets);
     }
 
     static List<EventSource<?, S3Bucket>> forBucket(KubernetesClient client, EventSourceContext<S3Bucket> context) {
-        var backends = informer(
-                S3Backend.class,
-                S3Bucket.class,
-                context,
-                backend -> matching(
-                        context,
-                        bucket -> ResourceValidation.hasUsableBucketSpec(bucket)
-                                && sameNamespace(bucket, backend)
-                                && backend.getMetadata()
-                                        .getName()
-                                        .equals(bucket.getSpec().getBackendRef())));
-        var users = informer(
-                S3User.class,
-                S3Bucket.class,
-                context,
-                user -> matching(
-                        context,
-                        bucket -> ResourceValidation.hasUsableBucketSpec(bucket)
-                                && sameNamespace(bucket, user)
-                                && user.getMetadata()
-                                        .getName()
-                                        .equals(bucket.getSpec().getUserRef())));
-        var secrets = informer(
-                Secret.class,
-                S3Bucket.class,
-                context,
-                secret -> matching(
-                        context,
-                        bucket -> ResourceValidation.hasUsableBucketSpec(bucket)
-                                && secretAffectsBucket(client, secret, bucket)));
+        var backends = informer(S3Backend.class, S3Bucket.class, context, bucketBackendMapper(context));
+        var users = informer(S3User.class, S3Bucket.class, context, bucketUserMapper(context));
+        var secrets = informer(Secret.class, S3Bucket.class, context, bucketSecretMapper(client, context));
         return List.of(backends, users, secrets);
+    }
+
+    static Function<S3Backend, Set<ResourceID>> userBackendMapper(EventSourceContext<S3User> context) {
+        return backend -> matching(
+                context,
+                user -> ResourceValidation.hasUsableUserSpec(user)
+                        && sameNamespace(user, backend)
+                        && backend.getMetadata().getName().equals(user.getSpec().getBackendRef()));
+    }
+
+    static Function<Secret, Set<ResourceID>> userSecretMapper(
+            KubernetesClient client, EventSourceContext<S3User> context) {
+        return secret -> matching(
+                context,
+                user -> ResourceValidation.hasUsableUserSpec(user) && secretAffectsUser(client, secret, user));
+    }
+
+    static Function<S3Backend, Set<ResourceID>> bucketBackendMapper(EventSourceContext<S3Bucket> context) {
+        return backend -> matching(
+                context,
+                bucket -> ResourceValidation.hasUsableBucketSpec(bucket)
+                        && sameNamespace(bucket, backend)
+                        && backend.getMetadata().getName().equals(bucket.getSpec().getBackendRef()));
+    }
+
+    static Function<S3User, Set<ResourceID>> bucketUserMapper(EventSourceContext<S3Bucket> context) {
+        return user -> matching(
+                context,
+                bucket -> ResourceValidation.hasUsableBucketSpec(bucket)
+                        && sameNamespace(bucket, user)
+                        && user.getMetadata().getName().equals(bucket.getSpec().getUserRef()));
+    }
+
+    static Function<Secret, Set<ResourceID>> bucketSecretMapper(
+            KubernetesClient client, EventSourceContext<S3Bucket> context) {
+        return secret -> matching(
+                context,
+                bucket -> ResourceValidation.hasUsableBucketSpec(bucket) && secretAffectsBucket(client, secret, bucket));
     }
 
     static boolean secretAffectsUser(KubernetesClient client, Secret secret, S3User user) {
