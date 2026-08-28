@@ -116,15 +116,12 @@ public class S3UserReconciler implements Reconciler<S3User>, Cleaner<S3User> {
     @Override
     public DeleteControl cleanup(S3User user, Context<S3User> context) {
         String namespace = user.getMetadata().getNamespace();
-        boolean referenced = client.resources(S3Bucket.class)
-                .inNamespace(namespace)
-                .list()
-                .getItems()
-                .stream()
+        boolean referenced = client.resources(S3Bucket.class).inNamespace(namespace).list().getItems().stream()
                 .anyMatch(bucket -> bucket.getSpec() != null
                         && user.getMetadata().getName().equals(bucket.getSpec().getUserRef()));
         if (referenced) {
-            throw new IllegalStateException("S3User is still referenced by an S3Bucket: " + user.getMetadata().getName());
+            throw new IllegalStateException("S3User is still referenced by an S3Bucket: "
+                    + user.getMetadata().getName());
         }
 
         if (!ResourceValidation.hasUsableUserSpec(user)) return DeleteControl.defaultDelete();
