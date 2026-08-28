@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Java 21
         uses: actions/setup-java@v5
@@ -27,7 +29,15 @@ jobs:
           cache: maven
 
       - name: Verify
-        run: mvn --batch-mode --no-transfer-progress verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            mvn --batch-mode --no-transfer-progress verify \
+              -Dspotless.ratchetFrom="${{ github.event.before }}"
+          else
+            mvn --batch-mode --no-transfer-progress verify
+          fi
 
       - name: Verify runtime dependency licenses
         run: bash hack/check-third-party-licenses.sh
