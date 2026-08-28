@@ -17,8 +17,7 @@ import java.util.concurrent.TimeUnit;
 public class KindVersityTestResource implements QuarkusTestResourceLifecycleManager {
     private static final String KUBECONFIG_PROPERTY = "quarkus.kubernetes-client.kubeconfig-file";
     private static final String ENDPOINT_PROPERTY = "test.s3.endpoint";
-    private static final String JVM_ENVIRONMENT_KEY =
-            KindVersityTestResource.class.getName() + ".jvm-environment";
+    private static final String JVM_ENVIRONMENT_KEY = KindVersityTestResource.class.getName() + ".jvm-environment";
 
     @Override
     public Map<String, String> start() {
