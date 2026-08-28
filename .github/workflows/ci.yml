@@ -39,6 +39,26 @@ jobs:
             mvn --batch-mode --no-transfer-progress -Pformat validate
           fi
 
+  clean-code:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Enforce Clean Code limits
+        run: >-
+          mvn --batch-mode --no-transfer-progress -f config/checkstyle-pom.xml
+          org.apache.maven.plugins:maven-checkstyle-plugin:3.6.0:check
+
   unit-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -258,11 +278,6 @@ jobs:
             --name s3-resource-operator-native-ci \
             s3-resource-operator:native-ci
           trap 'docker logs s3-resource-operator-native-ci || true; docker rm -f s3-resource-operator-native-ci >/dev/null 2>&1 || true' EXIT
-
-          # The operator requires a Kubernetes API and will eventually fail outside a
-          # cluster. For this smoke test we only need to prove that the native binary
-          # can execute on the runtime image; the old UBI8 image failed immediately
-          # with missing GLIBC symbols.
           sleep 5
           logs="$(docker logs s3-resource-operator-native-ci 2>&1 || true)"
           if grep -Eq 'GLIBC_[0-9.]+.*not found|/lib64/libc\.so\.6: version .* not found' <<<"$logs"; then
@@ -282,6 +297,7 @@ jobs:
     if: always()
     needs:
       - format
+      - clean-code
       - unit-tests
       - pmd
       - spotbugs
@@ -295,6 +311,7 @@ jobs:
       - name: Verify required checks
         run: |
           test "${{ needs.format.result }}" = success
+          test "${{ needs.clean-code.result }}" = success
           test "${{ needs.unit-tests.result }}" = success
           test "${{ needs.pmd.result }}" = success
           test "${{ needs.spotbugs.result }}" = success
