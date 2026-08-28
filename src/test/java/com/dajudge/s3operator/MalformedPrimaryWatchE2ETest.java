@@ -10,7 +10,7 @@ import java.time.Duration;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
-@QuarkusTestResource(KindVersityTestResource.class)
+@QuarkusTestResource(K3sVersityTestResource.class)
 @TestProfile(LongTimersTestProfile.class)
 class MalformedPrimaryWatchE2ETest extends OperatorE2ETestSupport {
 
