@@ -1,5 +1,6 @@
 package com.dajudge.s3operator.reconciler;
 
+import static com.dajudge.s3operator.reconciler.ReconcilerSupport.cleanupDependencies;
 import static com.dajudge.s3operator.reconciler.ReconcilerSupport.defaultedName;
 import static com.dajudge.s3operator.reconciler.ReconcilerSupport.readyCondition;
 import static com.dajudge.s3operator.reconciler.ReconcilerSupport.requireAdminSecret;
@@ -92,23 +93,14 @@ public class S3BucketReconciler implements Reconciler<S3Bucket>, Cleaner<S3Bucke
         }
 
         String namespace = bucket.getMetadata().getNamespace();
-        S3Backend backend = client.resources(S3Backend.class)
-                .inNamespace(namespace)
-                .withName(bucket.getSpec().getBackendRef())
-                .get();
-        if (!ResourceValidation.hasUsableBackendSpec(backend)
-                || !provider.type().equals(backend.getSpec().getProvider())) return DeleteControl.defaultDelete();
-
-        Secret adminSecret = client.secrets()
-                .inNamespace(namespace)
-                .withName(backend.getSpec().getAdminCredentialsSecretRef().getName())
-                .get();
-        if (adminSecret == null) return DeleteControl.defaultDelete();
+        var dependencies = cleanupDependencies(
+                client, provider, namespace, bucket.getSpec().getBackendRef());
+        if (dependencies == null) return DeleteControl.defaultDelete();
 
         provider.deleteBucket(
-                backend.getSpec().getEndpoint(),
-                secretValue(adminSecret, "accessKey"),
-                secretValue(adminSecret, "secretKey"),
+                dependencies.backend().getSpec().getEndpoint(),
+                secretValue(dependencies.adminSecret(), "accessKey"),
+                secretValue(dependencies.adminSecret(), "secretKey"),
                 bucketName(bucket));
         return DeleteControl.defaultDelete();
     }
