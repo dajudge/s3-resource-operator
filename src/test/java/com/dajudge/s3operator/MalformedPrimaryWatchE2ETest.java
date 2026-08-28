@@ -5,16 +5,13 @@ import com.dajudge.s3operator.api.S3User;
 import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
-import org.junit.jupiter.api.Test;
-
 import java.time.Duration;
-import java.util.Map;
+import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 @QuarkusTestResource(KindVersityTestResource.class)
-@TestProfile(MalformedPrimaryWatchE2ETest.LongTimers.class)
+@TestProfile(LongTimersTestProfile.class)
 class MalformedPrimaryWatchE2ETest extends OperatorE2ETestSupport {
 
     @Test
@@ -47,22 +44,15 @@ class MalformedPrimaryWatchE2ETest extends OperatorE2ETestSupport {
 
     private void createMalformedUser(String name) {
         S3User user = new S3User();
-        user.setMetadata(new ObjectMetaBuilder().withName(name).withNamespace(NS).build());
+        user.setMetadata(
+                new ObjectMetaBuilder().withName(name).withNamespace(NS).build());
         client.resources(S3User.class).inNamespace(NS).resource(user).create();
     }
 
     private void createMalformedBucket(String name) {
         S3Bucket bucket = new S3Bucket();
-        bucket.setMetadata(new ObjectMetaBuilder().withName(name).withNamespace(NS).build());
+        bucket.setMetadata(
+                new ObjectMetaBuilder().withName(name).withNamespace(NS).build());
         client.resources(S3Bucket.class).inNamespace(NS).resource(bucket).create();
-    }
-
-    public static class LongTimers implements QuarkusTestProfile {
-        @Override
-        public Map<String, String> getConfigOverrides() {
-            return Map.of(
-                    "s3.operator.resync-interval", "1h",
-                    "s3.operator.retry-delay", "1h");
-        }
     }
 }
