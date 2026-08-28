@@ -102,8 +102,7 @@ jobs:
           java-version: '21'
           cache: maven
 
-      - name: Run PIT baseline
-        continue-on-error: true
+      - name: Run PIT mutation tests
         run: mvn --batch-mode --no-transfer-progress test-compile org.pitest:pitest-maven:mutationCoverage
 
       - name: Upload PIT report
