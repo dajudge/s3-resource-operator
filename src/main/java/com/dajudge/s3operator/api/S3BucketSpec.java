@@ -1,19 +1,18 @@
 package com.dajudge.s3operator.api;
 
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
 public class S3BucketSpec {
     private String backendRef;
     private String userRef;
     private String bucketName;
     private DeletionPolicy deletionPolicy = DeletionPolicy.RETAIN;
 
-    public String getBackendRef() { return backendRef; }
-    public void setBackendRef(String backendRef) { this.backendRef = backendRef; }
-    public String getUserRef() { return userRef; }
-    public void setUserRef(String userRef) { this.userRef = userRef; }
-    public String getBucketName() { return bucketName; }
-    public void setBucketName(String bucketName) { this.bucketName = bucketName; }
-    public DeletionPolicy getDeletionPolicy() { return deletionPolicy; }
-    public void setDeletionPolicy(DeletionPolicy deletionPolicy) { this.deletionPolicy = deletionPolicy; }
-
-    public enum DeletionPolicy { RETAIN, DELETE }
+    public enum DeletionPolicy {
+        RETAIN,
+        DELETE
+    }
 }

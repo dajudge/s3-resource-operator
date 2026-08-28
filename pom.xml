@@ -23,6 +23,7 @@
     <aws.sdk.version>2.43.2</aws.sdk.version>
     <awaitility.version>4.3.0</awaitility.version>
     <mockito.version>5.23.0</mockito.version>
+    <lombok.version>1.18.46</lombok.version>
     <spotbugs-maven-plugin.version>4.10.3.0</spotbugs-maven-plugin.version>
     <maven-pmd-plugin.version>3.28.0</maven-pmd-plugin.version>
     <license-maven-plugin.version>2.7.1</license-maven-plugin.version>
@@ -68,6 +69,12 @@
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-arc</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <version>${lombok.version}</version>
+      <scope>provided</scope>
     </dependency>
 
     <dependency>
@@ -143,6 +150,15 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
         <version>3.14.0</version>
+        <configuration>
+          <annotationProcessorPaths>
+            <path>
+              <groupId>org.projectlombok</groupId>
+              <artifactId>lombok</artifactId>
+              <version>${lombok.version}</version>
+            </path>
+          </annotationProcessorPaths>
+        </configuration>
       </plugin>
       <plugin>
         <groupId>com.diffplug.spotless</groupId>
