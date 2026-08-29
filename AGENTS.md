@@ -61,6 +61,7 @@ Guidance for coding agents working in this repository.
 
 ## Working style
 
+- On every fresh session or handoff, read this `AGENTS.md` first, then inspect all open PRs, current CI status, review comments, and unresolved review threads before starting new work. Prioritize fixing red PRs and actionable review feedback over opening or advancing another PR.
 - Act proactively. Do not ask for clarification when the intended action is clear from repository state and these guidelines.
 - Prefer concrete progress over status-only commentary: inspect, fix, respond to reviews, resolve addressed threads, and merge when safe.
 - Keep status updates concise and mention blockers only when they materially affect progress.
