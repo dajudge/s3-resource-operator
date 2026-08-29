@@ -13,11 +13,14 @@ Scope: Namespaced
 
 | Field | Type | Required by CRD | Default | Description |
 | --- | --- | :---: | --- | --- |
+| `provider` | `string` | No | — | — |
+| `endpoint` | `string` | No | — | — |
+| `adminCredentialsSecretRef` | `object` | No | — | — |
+| `adminCredentialsSecretRef.name` | `string` | No | — | — |
 
 ### `status`
 
-| Field | Type | Required by CRD | Default | Description |
-| --- | --- | :---: | --- | --- |
+The CRD preserves unknown status fields (`x-kubernetes-preserve-unknown-fields`).
 
 ## S3User
 
@@ -28,11 +31,13 @@ Scope: Namespaced
 
 | Field | Type | Required by CRD | Default | Description |
 | --- | --- | :---: | --- | --- |
+| `backendRef` | `string` | No | — | — |
+| `secretName` | `string` | No | — | — |
+| `role` | `string` | No | — | — |
 
 ### `status`
 
-| Field | Type | Required by CRD | Default | Description |
-| --- | --- | :---: | --- | --- |
+The CRD preserves unknown status fields (`x-kubernetes-preserve-unknown-fields`).
 
 ## S3Bucket
 
@@ -43,8 +48,11 @@ Scope: Namespaced
 
 | Field | Type | Required by CRD | Default | Description |
 | --- | --- | :---: | --- | --- |
+| `backendRef` | `string` | No | — | — |
+| `userRef` | `string` | No | — | — |
+| `bucketName` | `string` | No | — | — |
+| `deletionPolicy` | `string` (`DELETE` \| `RETAIN`) | No | — | — |
 
 ### `status`
 
-| Field | Type | Required by CRD | Default | Description |
-| --- | --- | :---: | --- | --- |
+The CRD preserves unknown status fields (`x-kubernetes-preserve-unknown-fields`).
