@@ -33,10 +33,10 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "${{ github.event_name }}" == "push" ]]; then
-            mvn --batch-mode --no-transfer-progress -Pformat validate \
+            ./mvnw --batch-mode --no-transfer-progress -Pformat validate \
               -Dspotless.ratchetFrom="${{ github.event.before }}"
           else
-            mvn --batch-mode --no-transfer-progress -Pformat validate
+            ./mvnw --batch-mode --no-transfer-progress -Pformat validate
           fi
 
   clean-code:
@@ -56,7 +56,7 @@ jobs:
 
       - name: Enforce Clean Code limits
         run: >-
-          mvn --batch-mode --no-transfer-progress -f config/checkstyle-pom.xml
+          ./mvnw --batch-mode --no-transfer-progress -f config/checkstyle-pom.xml
           org.apache.maven.plugins:maven-checkstyle-plugin:3.6.0:check
 
   unit-tests:
@@ -75,7 +75,7 @@ jobs:
           cache: maven
 
       - name: Run unit tests
-        run: mvn --batch-mode --no-transfer-progress -Punit-tests verify
+        run: ./mvnw --batch-mode --no-transfer-progress -Punit-tests verify
 
       - name: Upload JaCoCo report
         if: always()
@@ -111,7 +111,7 @@ jobs:
           cache: maven
 
       - name: Run PMD and CPD
-        run: mvn --batch-mode --no-transfer-progress -Ppmd verify -DskipUnitTests=true
+        run: ./mvnw --batch-mode --no-transfer-progress -Ppmd verify -DskipUnitTests=true
 
   spotbugs:
     runs-on: ubuntu-latest
@@ -129,7 +129,7 @@ jobs:
           cache: maven
 
       - name: Run SpotBugs
-        run: mvn --batch-mode --no-transfer-progress -Pspotbugs verify -DskipUnitTests=true
+        run: ./mvnw --batch-mode --no-transfer-progress -Pspotbugs verify -DskipUnitTests=true
 
   licenses:
     runs-on: ubuntu-latest
@@ -147,7 +147,7 @@ jobs:
           cache: maven
 
       - name: Generate runtime dependency licenses
-        run: mvn --batch-mode --no-transfer-progress -Plicenses generate-resources
+        run: ./mvnw --batch-mode --no-transfer-progress -Plicenses generate-resources
 
       - name: Verify runtime dependency licenses
         run: bash hack/check-third-party-licenses.sh
@@ -168,7 +168,7 @@ jobs:
           cache: maven
 
       - name: Build JVM application
-        run: mvn --batch-mode --no-transfer-progress -Punit-tests package -DskipUnitTests=true
+        run: ./mvnw --batch-mode --no-transfer-progress -Punit-tests package -DskipUnitTests=true
 
       - name: Set up Helm
         uses: azure/setup-helm@v5
@@ -213,7 +213,7 @@ jobs:
           cache: maven
 
       - name: Run PIT mutation tests
-        run: mvn --batch-mode --no-transfer-progress -Punit-tests test-compile org.pitest:pitest-maven:mutationCoverage
+        run: ./mvnw --batch-mode --no-transfer-progress -Punit-tests test-compile org.pitest:pitest-maven:mutationCoverage
 
       - name: Upload PIT report
         if: always()
@@ -240,7 +240,7 @@ jobs:
 
       - name: Run focused event-source PIT tests
         run: >-
-          mvn --batch-mode --no-transfer-progress -Punit-tests test-compile
+          ./mvnw --batch-mode --no-transfer-progress -Punit-tests test-compile
           org.pitest:pitest-maven:mutationCoverage
           -DtargetClasses=com.dajudge.s3operator.reconciler.RelatedResourceEventSources*
           -DtargetTests=com.dajudge.s3operator.reconciler.RelatedResourceEventSourcesTest*
@@ -261,7 +261,7 @@ jobs:
           cache: maven
 
       - name: Build native executable
-        run: mvn --batch-mode --no-transfer-progress -Plicenses package -Dnative -Dquarkus.native.container-build=true -DskipUnitTests=true
+        run: ./mvnw --batch-mode --no-transfer-progress -Plicenses package -Dnative -Dquarkus.native.container-build=true -DskipUnitTests=true
 
       - name: Build and ABI smoke-test native container
         shell: bash
