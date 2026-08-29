@@ -25,8 +25,8 @@ class VersityS3ProviderTest {
     @Test
     void createsSignedAdminRequest() throws Exception {
         HttpClient client = mock(HttpClient.class);
-        when(client.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
-                .thenReturn(response(200, ""));
+        HttpResponse<String> ok = response(200, "");
+        when(client.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class))).thenReturn(ok);
 
         new VersityS3Provider(client, CLOCK)
                 .createUser(ENDPOINT, "admin-access", "admin-secret", "user access", "secret", "admin");
@@ -44,11 +44,14 @@ class VersityS3ProviderTest {
     @Test
     void convergesExistingUserAndBucketOwner() throws Exception {
         HttpClient client = mock(HttpClient.class);
+        HttpResponse<String> userExists = response(409, "<Code>XAdminUserExists</Code>");
+        HttpResponse<String> ok = response(200, "");
+        HttpResponse<String> bucketExists = response(409, "<Code>BucketAlreadyExists</Code>");
         when(client.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
-                .thenReturn(response(409, "<Code>XAdminUserExists</Code>"))
-                .thenReturn(response(200, ""))
-                .thenReturn(response(409, "<Code>BucketAlreadyExists</Code>"))
-                .thenReturn(response(200, ""));
+                .thenReturn(userExists)
+                .thenReturn(ok)
+                .thenReturn(bucketExists)
+                .thenReturn(ok);
         VersityS3Provider provider = new VersityS3Provider(client, CLOCK);
 
         provider.createUser(ENDPOINT, "admin", "secret", "user a", "rotated", "admin");
@@ -68,10 +71,13 @@ class VersityS3ProviderTest {
     @Test
     void toleratesMissingDeletesAndRejectsUnexpectedErrors() throws Exception {
         HttpClient client = mock(HttpClient.class);
+        HttpResponse<String> missingBucket = response(404, "<Code>NoSuchBucket</Code>");
+        HttpResponse<String> missingUser = response(404, "<Code>XAdminUserNotFound</Code>");
+        HttpResponse<String> serverError = response(500, "boom");
         when(client.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
-                .thenReturn(response(404, "<Code>NoSuchBucket</Code>"))
-                .thenReturn(response(404, "<Code>XAdminUserNotFound</Code>"))
-                .thenReturn(response(500, "boom"));
+                .thenReturn(missingBucket)
+                .thenReturn(missingUser)
+                .thenReturn(serverError);
         VersityS3Provider provider = new VersityS3Provider(client, CLOCK);
 
         provider.deleteBucket(ENDPOINT, "admin", "secret", "missing");
