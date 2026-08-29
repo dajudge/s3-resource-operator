@@ -117,7 +117,7 @@ crds.each { Map crd ->
 }
 
 String generated = output.join(System.lineSeparator()).stripTrailing() + System.lineSeparator()
-boolean update = project.properties.getProperty('docs.update', 'false').toBoolean()
+boolean update = System.getProperty('docs.update', 'false').toBoolean()
 
 if (update) {
     Files.createDirectories(referenceFile.parent)
