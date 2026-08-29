@@ -169,17 +169,25 @@ class OperatorE2ETest extends OperatorE2ETestSupport {
     }
 
     private S3User awaitUserReady(String name) {
-        S3User user = awaitUser(name, "True", "Reconciled");
-        assertThat(user.getStatus().getObservedGeneration())
-                .isEqualTo(user.getMetadata().getGeneration());
-        return user;
+        final S3User[] result = new S3User[1];
+        await().atMost(TIMEOUT).untilAsserted(() -> {
+            S3User user = awaitUser(name, "True", "Reconciled");
+            assertThat(user.getStatus().getObservedGeneration())
+                    .isEqualTo(user.getMetadata().getGeneration());
+            result[0] = user;
+        });
+        return result[0];
     }
 
     private S3Bucket awaitBucketReady(String name) {
-        S3Bucket bucket = awaitBucket(name, "True", "Reconciled");
-        assertThat(bucket.getStatus().getObservedGeneration())
-                .isEqualTo(bucket.getMetadata().getGeneration());
-        return bucket;
+        final S3Bucket[] result = new S3Bucket[1];
+        await().atMost(TIMEOUT).untilAsserted(() -> {
+            S3Bucket bucket = awaitBucket(name, "True", "Reconciled");
+            assertThat(bucket.getStatus().getObservedGeneration())
+                    .isEqualTo(bucket.getMetadata().getGeneration());
+            result[0] = bucket;
+        });
+        return result[0];
     }
 
     private Secret awaitCredentials(String name) {
