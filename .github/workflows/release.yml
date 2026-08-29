@@ -86,7 +86,7 @@ jobs:
           cache: maven
 
       - name: Verify JVM build
-        run: mvn --batch-mode --no-transfer-progress verify
+        run: ./mvnw --batch-mode --no-transfer-progress verify
 
       - name: Verify runtime dependency licenses
         run: bash hack/check-third-party-licenses.sh
@@ -148,7 +148,7 @@ jobs:
 
       - name: Build and test native executable
         run: >-
-          mvn --batch-mode --no-transfer-progress verify
+          ./mvnw --batch-mode --no-transfer-progress verify
           -Dnative
           -Dquarkus.native.container-build=true
           -DskipUnitTests=true
@@ -193,7 +193,7 @@ jobs:
 
       - name: Generate runtime dependency licenses
         run: |
-          mvn --batch-mode --no-transfer-progress generate-resources -DskipTests
+          ./mvnw --batch-mode --no-transfer-progress generate-resources -DskipTests
           bash hack/check-third-party-licenses.sh
 
       - name: Download amd64 executable
