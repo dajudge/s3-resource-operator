@@ -84,6 +84,9 @@ crds.each { Map crd ->
         Map schemaProperties = (schema.get('properties') ?: [:]) as Map
         Map specSchema = (schemaProperties.get('spec') ?: [:]) as Map
         Map specProperties = (specSchema.get('properties') ?: [:]) as Map
+        if (specSchema.containsKey('properties') && specProperties.isEmpty()) {
+            throw new IllegalStateException("Spec schema for ${kind} declares properties but none were extracted")
+        }
         Set required = (specSchema.get('required') ?: []) as Set
 
         output.addAll([
