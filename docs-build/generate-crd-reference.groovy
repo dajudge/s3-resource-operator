@@ -15,7 +15,13 @@ String escapeCell(Object value) {
     if (value == null) {
         return '—'
     }
-    String rendered = value.toString().replace('|', '\\|').replaceAll(/\s+/, ' ').trim()
+    String rendered = value.toString()
+            .replace('&', '&amp;')
+            .replace('<', '&lt;')
+            .replace('>', '&gt;')
+            .replace('|', '\\|')
+            .replaceAll(/\s+/, ' ')
+            .trim()
     return rendered ?: '—'
 }
 
