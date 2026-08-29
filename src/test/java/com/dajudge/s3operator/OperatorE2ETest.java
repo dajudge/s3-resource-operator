@@ -77,28 +77,19 @@ class OperatorE2ETest extends OperatorE2ETestSupport {
     }
 
     private void verifyUpdatesPreserveTransitionTimes(S3Client s3, ReadyResources ready) {
-        client.resources(S3User.class)
-                .inNamespace(NS)
-                .withName("e2e-user")
-                .edit(user -> {
-                    user.getSpec().setRole("admin");
-                    return user;
-                });
-        client.resources(S3Bucket.class)
-                .inNamespace(NS)
-                .withName("e2e-bucket")
-                .edit(bucket -> {
-                    bucket.getSpec().setDeletionPolicy(S3BucketSpec.DeletionPolicy.DELETE);
-                    return bucket;
-                });
+        client.resources(S3User.class).inNamespace(NS).withName("e2e-user").edit(user -> {
+            user.getSpec().setRole("admin");
+            return user;
+        });
+        client.resources(S3Bucket.class).inNamespace(NS).withName("e2e-bucket").edit(bucket -> {
+            bucket.getSpec().setDeletionPolicy(S3BucketSpec.DeletionPolicy.DELETE);
+            return bucket;
+        });
         await().atMost(TIMEOUT).untilAsserted(() -> assertUpdatedResources(s3, ready));
-        client.resources(S3Bucket.class)
-                .inNamespace(NS)
-                .withName("e2e-bucket")
-                .edit(bucket -> {
-                    bucket.getSpec().setDeletionPolicy(S3BucketSpec.DeletionPolicy.RETAIN);
-                    return bucket;
-                });
+        client.resources(S3Bucket.class).inNamespace(NS).withName("e2e-bucket").edit(bucket -> {
+            bucket.getSpec().setDeletionPolicy(S3BucketSpec.DeletionPolicy.RETAIN);
+            return bucket;
+        });
         awaitBucketReady("e2e-bucket");
     }
 
@@ -179,13 +170,15 @@ class OperatorE2ETest extends OperatorE2ETestSupport {
 
     private S3User awaitUserReady(String name) {
         S3User user = awaitUser(name, "True", "Reconciled");
-        assertThat(user.getStatus().getObservedGeneration()).isEqualTo(user.getMetadata().getGeneration());
+        assertThat(user.getStatus().getObservedGeneration())
+                .isEqualTo(user.getMetadata().getGeneration());
         return user;
     }
 
     private S3Bucket awaitBucketReady(String name) {
         S3Bucket bucket = awaitBucket(name, "True", "Reconciled");
-        assertThat(bucket.getStatus().getObservedGeneration()).isEqualTo(bucket.getMetadata().getGeneration());
+        assertThat(bucket.getStatus().getObservedGeneration())
+                .isEqualTo(bucket.getMetadata().getGeneration());
         return bucket;
     }
 
