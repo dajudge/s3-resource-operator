@@ -93,6 +93,20 @@ class VersityProviderE2ETest {
         }
     }
 
+    @Test
+    void deletesAreIdempotent() {
+        VersityS3Provider provider = new VersityS3Provider();
+        String access = "idempotent-provider-user";
+        String secret = "idempotent-provider-secret";
+        String bucket = "idempotent-provider-bucket";
+        provider.createUser(endpoint, ROOT_ACCESS, ROOT_SECRET, access, secret, "user");
+        provider.createBucket(endpoint, ROOT_ACCESS, ROOT_SECRET, bucket, access);
+        provider.deleteBucket(endpoint, ROOT_ACCESS, ROOT_SECRET, bucket);
+        provider.deleteBucket(endpoint, ROOT_ACCESS, ROOT_SECRET, bucket);
+        provider.deleteUser(endpoint, ROOT_ACCESS, ROOT_SECRET, access);
+        provider.deleteUser(endpoint, ROOT_ACCESS, ROOT_SECRET, access);
+    }
+
     private S3Client s3(String access, String secret) {
         return S3Client.builder()
                 .endpointOverride(URI.create(endpoint))
