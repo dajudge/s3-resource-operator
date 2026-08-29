@@ -36,7 +36,7 @@ Scope: Namespaced
 | --- | --- | :---: | --- | --- |
 | `backendRef` | `string` | Yes | — | Name of the S3Backend resource that manages this user. |
 | `role` | `string` | No | `user` | Provider role assigned to the S3 user. |
-| `secretName` | `string` | No | — | Name of the generated credentials Secret. Defaults to <resource-name>-s3. |
+| `secretName` | `string` | No | — | Name of the generated credentials Secret. Defaults to &lt;resource-name&gt;-s3. |
 
 ### `status`
 
