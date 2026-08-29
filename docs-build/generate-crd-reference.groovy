@@ -116,7 +116,7 @@ crds.each { Map crd ->
     }
 }
 
-String generated = output.join(System.lineSeparator()).stripTrailing() + System.lineSeparator()
+String generated = output.join('\n').stripTrailing() + '\n'
 boolean update = System.getProperty('docs.update', 'false').toBoolean()
 
 if (update) {
