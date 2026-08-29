@@ -46,8 +46,8 @@ jobs:
               pom.write_text(text)
           PY
 
-      - name: Generate CRDs from Java model
-        run: ./mvnw --batch-mode --no-transfer-progress -DskipUnitTests=true -DskipITs=true package
+      - name: Generate and validate all CRDs
+        run: ./mvnw --batch-mode --no-transfer-progress -Dtest=ApiContractE2ETest test
 
       - name: Refresh Helm CRDs
         run: |
