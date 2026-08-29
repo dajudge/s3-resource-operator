@@ -20,13 +20,14 @@ String escapeCell(Object value) {
 }
 
 String renderType(Map property) {
-    String type = property.type ?: 'object'
+    String type = property['type'] ?: 'object'
+    Map items = (property['items'] ?: [:]) as Map
     if (type == 'array') {
-        type = "array<${property.items?.type ?: 'object'}>"
+        type = "array<${items['type'] ?: 'object'}>"
     }
     String rendered = "`${type}`"
-    if (property.enum) {
-        rendered += ' (' + property.enum.collect { "`${escapeCell(it)}`" }.join(' \\| ') + ')'
+    if (property['enum']) {
+        rendered += ' (' + (property['enum'] as List).collect { "`${escapeCell(it)}`" }.join(' \\| ') + ')'
     }
     return rendered
 }
@@ -36,17 +37,17 @@ List<List<String>> propertyRows(Map properties, Set required, String prefix = ''
     properties.each { String name, Object rawProperty ->
         Map property = rawProperty as Map
         String field = prefix ? "${prefix}.${name}" : name
-        String defaultValue = property.containsKey('default') ? "`${escapeCell(property.default)}`" : '—'
+        String defaultValue = property.containsKey('default') ? "`${escapeCell(property['default'])}`" : '—'
         rows << [
                 "`${field}`",
                 renderType(property),
                 required.contains(name) ? 'Yes' : 'No',
                 defaultValue,
-                escapeCell(property.description)
+                escapeCell(property['description'])
         ]
-        if (property.properties instanceof Map) {
-            Set nestedRequired = (property.required ?: []) as Set
-            rows.addAll(propertyRows(property.properties as Map, nestedRequired, field))
+        if (property['properties'] instanceof Map) {
+            Set nestedRequired = (property['required'] ?: []) as Set
+            rows.addAll(propertyRows(property['properties'] as Map, nestedRequired, field))
         }
     }
     return rows
@@ -72,19 +73,23 @@ List<String> output = [
 ]
 
 crds.each { Map crd ->
-    String kind = crd.spec.names.kind
-    String group = crd.spec.group
-    String scope = crd.spec.scope
-    crd.spec.versions.each { Map version ->
-        Map schema = version.schema.openAPIV3Schema as Map
-        Map specSchema = (schema.properties?.spec ?: [:]) as Map
-        Map specProperties = (specSchema.properties ?: [:]) as Map
-        Set required = (specSchema.required ?: []) as Set
+    Map crdSpec = crd['spec'] as Map
+    Map names = crdSpec['names'] as Map
+    String kind = names['kind']
+    String group = crdSpec['group']
+    String scope = crdSpec['scope']
+    (crdSpec['versions'] as List<Map>).each { Map version ->
+        Map versionSchema = version['schema'] as Map
+        Map schema = versionSchema['openAPIV3Schema'] as Map
+        Map schemaProperties = (schema['properties'] ?: [:]) as Map
+        Map specSchema = (schemaProperties['spec'] ?: [:]) as Map
+        Map specProperties = (specSchema['properties'] ?: [:]) as Map
+        Set required = (specSchema['required'] ?: []) as Set
 
         output.addAll([
                 "## ${kind}",
                 '',
-                "API version: `${group}/${version.name}`  ",
+                "API version: `${group}/${version['name']}`  ",
                 "Scope: ${scope}",
                 '',
                 '### `spec`',
@@ -97,16 +102,16 @@ crds.each { Map crd ->
             output << "| ${row.join(' | ')} |"
         }
 
-        Map statusSchema = (schema.properties?.status ?: [:]) as Map
+        Map statusSchema = (schemaProperties['status'] ?: [:]) as Map
         output.addAll(['', '### `status`', ''])
         if (statusSchema['x-kubernetes-preserve-unknown-fields'] == true) {
             output << 'The CRD preserves unknown status fields (`x-kubernetes-preserve-unknown-fields`).'
-        } else if (statusSchema.properties instanceof Map) {
+        } else if (statusSchema['properties'] instanceof Map) {
             output.addAll([
                     '| Field | Type | Required by CRD | Default | Description |',
                     '| --- | --- | :---: | --- | --- |'
             ])
-            propertyRows(statusSchema.properties as Map, (statusSchema.required ?: []) as Set).each { List<String> row ->
+            propertyRows(statusSchema['properties'] as Map, (statusSchema['required'] ?: []) as Set).each { List<String> row ->
                 output << "| ${row.join(' | ')} |"
             }
         } else {
