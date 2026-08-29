@@ -120,7 +120,10 @@ class ApiContractE2ETest extends OperatorE2ETestSupport {
         try (S3Client s3 = s3(secretValue(secret, "accessKey"), secretValue(secret, "secretKey"))) {
             awaitAccessible(s3, "defaults-bucket");
         }
-        client.resources(S3Bucket.class).inNamespace(NS).withName("defaults-bucket").delete();
+        client.resources(S3Bucket.class)
+                .inNamespace(NS)
+                .withName("defaults-bucket")
+                .delete();
         awaitDeleted(S3Bucket.class, "defaults-bucket");
         try (S3Client s3 = s3(secretValue(secret, "accessKey"), secretValue(secret, "secretKey"))) {
             awaitAccessible(s3, "defaults-bucket");
