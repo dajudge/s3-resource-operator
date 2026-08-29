@@ -118,6 +118,16 @@ The operator deliberately does **not** purge bucket contents. With `deletionPoli
 
 An `S3User` cannot be deleted while an `S3Bucket` resource still references it.
 
+## Development
+
+The repository requires JDK 21. Use the checked-in Maven Wrapper as the build entry point; a system Maven installation is not required.
+
+```bash
+./mvnw verify
+```
+
+The wrapper pins the Maven version used by local development and CI.
+
 ## Releases
 
 A successful tagged release creates a GitHub Release for `release/<semver>` only after the native amd64/arm64 images and OCI Helm chart have been published successfully.
