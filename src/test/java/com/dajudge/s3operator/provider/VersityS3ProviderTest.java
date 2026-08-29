@@ -26,7 +26,8 @@ class VersityS3ProviderTest {
     void createsSignedAdminRequest() throws Exception {
         HttpClient client = mock(HttpClient.class);
         HttpResponse<String> ok = response(200, "");
-        when(client.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class))).thenReturn(ok);
+        when(client.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+                .thenReturn(ok);
 
         new VersityS3Provider(client, CLOCK)
                 .createUser(ENDPOINT, "admin-access", "admin-secret", "user access", "secret", "admin");
