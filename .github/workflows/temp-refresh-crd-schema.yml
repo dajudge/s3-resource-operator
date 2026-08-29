@@ -32,6 +32,20 @@ jobs:
         with:
           python-version: '3.13'
 
+      - name: Add generator annotations dependency
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          pom = Path('pom.xml')
+          text = pom.read_text()
+          marker = '''    <dependency>\n      <groupId>io.quarkus</groupId>\n      <artifactId>quarkus-rest-client-jackson</artifactId>\n    </dependency>\n'''
+          dependency = '''    <dependency>\n      <groupId>io.fabric8</groupId>\n      <artifactId>generator-annotations</artifactId>\n    </dependency>\n'''
+          if dependency not in text:
+              text = text.replace(marker, dependency + marker, 1)
+              pom.write_text(text)
+          PY
+
       - name: Generate CRDs from Java model
         run: ./mvnw --batch-mode --no-transfer-progress -DskipTests -DskipITs package
 
@@ -50,7 +64,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add charts/s3-resource-operator/crds/s3.dajudge.com.yaml docs/reference/crds.md
+          git add pom.xml charts/s3-resource-operator/crds/s3.dajudge.com.yaml docs/reference/crds.md
           git rm .github/workflows/temp-refresh-crd-schema.yml
           git commit -m "Refresh generated CRD schema artifacts"
           git push origin HEAD:docs/enrich-crd-schema
