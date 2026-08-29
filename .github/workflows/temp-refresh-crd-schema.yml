@@ -47,7 +47,7 @@ jobs:
           PY
 
       - name: Generate CRDs from Java model
-        run: ./mvnw --batch-mode --no-transfer-progress -DskipTests -DskipITs package
+        run: ./mvnw --batch-mode --no-transfer-progress -DskipUnitTests=true -DskipITs=true package
 
       - name: Refresh Helm CRDs
         run: |
