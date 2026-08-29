@@ -25,7 +25,8 @@ class VersityS3ProviderTest {
     @Test
     void createsSignedAdminRequest() throws Exception {
         HttpClient client = mock(HttpClient.class);
-        when(client.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class))).thenReturn(response(200, ""));
+        when(client.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+                .thenReturn(response(200, ""));
 
         new VersityS3Provider(client, CLOCK)
                 .createUser(ENDPOINT, "admin-access", "admin-secret", "user access", "secret", "admin");
@@ -33,8 +34,9 @@ class VersityS3ProviderTest {
         HttpRequest request = capturedRequest(client);
         assertThat(request.method()).isEqualTo("PATCH");
         assertThat(request.uri().toString()).isEqualTo(ENDPOINT + "/create-user");
-        assertThat(request.headers().firstValue("Authorization")).hasValueSatisfying(value -> assertThat(value)
-                .startsWith("AWS4-HMAC-SHA256 Credential=admin-access/20260829/us-east-1/s3/aws4_request"));
+        assertThat(request.headers().firstValue("Authorization"))
+                .hasValueSatisfying(value -> assertThat(value)
+                        .startsWith("AWS4-HMAC-SHA256 Credential=admin-access/20260829/us-east-1/s3/aws4_request"));
         assertThat(request.headers().firstValue("X-Amz-Date")).contains("20260829T000000Z");
         assertThat(request.headers().firstValue("content-type")).contains("application/xml");
     }
@@ -83,9 +85,10 @@ class VersityS3ProviderTest {
     @Test
     void wrapsIoFailuresAndPreservesInterrupts() throws Exception {
         HttpClient ioClient = mock(HttpClient.class);
-        when(ioClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class))).thenThrow(new IOException("offline"));
-        assertThatThrownBy(() -> new VersityS3Provider(ioClient, CLOCK)
-                        .deleteBucket(ENDPOINT, "admin", "secret", "bucket"))
+        when(ioClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+                .thenThrow(new IOException("offline"));
+        assertThatThrownBy(() ->
+                        new VersityS3Provider(ioClient, CLOCK).deleteBucket(ENDPOINT, "admin", "secret", "bucket"))
                 .isInstanceOf(S3ProviderException.class)
                 .hasCauseInstanceOf(IOException.class);
 
