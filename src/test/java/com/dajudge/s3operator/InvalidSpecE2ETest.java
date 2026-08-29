@@ -61,7 +61,10 @@ class InvalidSpecE2ETest {
                 .build());
         backend.setSpec(new S3BackendSpec());
 
-        assertThatThrownBy(() -> client.resources(S3Backend.class).inNamespace(NS).resource(backend).create())
+        assertThatThrownBy(() -> client.resources(S3Backend.class)
+                        .inNamespace(NS)
+                        .resource(backend)
+                        .create())
                 .isInstanceOf(KubernetesClientException.class)
                 .hasMessageContaining("spec.adminCredentialsSecretRef: Required value")
                 .hasMessageContaining("spec.endpoint: Required value");
@@ -76,7 +79,10 @@ class InvalidSpecE2ETest {
                 .build());
         bucket.setSpec(new S3BucketSpec());
 
-        assertThatThrownBy(() -> client.resources(S3Bucket.class).inNamespace(NS).resource(bucket).create())
+        assertThatThrownBy(() -> client.resources(S3Bucket.class)
+                        .inNamespace(NS)
+                        .resource(bucket)
+                        .create())
                 .isInstanceOf(KubernetesClientException.class)
                 .hasMessageContaining("spec.backendRef: Required value")
                 .hasMessageContaining("spec.userRef: Required value");
