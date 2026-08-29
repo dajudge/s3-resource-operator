@@ -64,6 +64,10 @@
       <version>${quarkus-operator-sdk.version}</version>
     </dependency>
     <dependency>
+      <groupId>io.fabric8</groupId>
+      <artifactId>generator-annotations</artifactId>
+    </dependency>
+    <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-rest-client-jackson</artifactId>
     </dependency>
