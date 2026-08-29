@@ -42,8 +42,5 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Generate reference and build MkDocs site
-        run: ./mvnw --batch-mode --no-transfer-progress -f docs-build/pom.xml verify -Ddocs.update=true
-
-      - name: Verify generated reference is committed
-        run: git diff --exit-code -- docs/reference/crds.md
+      - name: Verify generated reference and build MkDocs site
+        run: ./mvnw --batch-mode --no-transfer-progress -f docs-build/pom.xml verify
