@@ -51,8 +51,7 @@ class VersityProviderE2ETest {
 
         try (S3Client stale = s3(access, initialSecret)) {
             await().atMost(Duration.ofSeconds(30))
-                    .untilAsserted(
-                            () -> assertThat(credentialsRejected(stale, bucket)).isTrue());
+                    .untilAsserted(() -> assertThat(credentialsRejected(stale, bucket)).isTrue());
         } finally {
             provider.deleteBucket(endpoint, ROOT_ACCESS, ROOT_SECRET, bucket);
             provider.deleteUser(endpoint, ROOT_ACCESS, ROOT_SECRET, access);
@@ -84,8 +83,7 @@ class VersityProviderE2ETest {
 
         try (S3Client formerOwner = s3(firstAccess, firstSecret)) {
             await().atMost(Duration.ofSeconds(30))
-                    .untilAsserted(() ->
-                            assertThat(credentialsRejected(formerOwner, bucket)).isTrue());
+                    .untilAsserted(() -> assertThat(credentialsRejected(formerOwner, bucket)).isTrue());
         } finally {
             provider.deleteBucket(endpoint, ROOT_ACCESS, ROOT_SECRET, bucket);
             provider.deleteUser(endpoint, ROOT_ACCESS, ROOT_SECRET, firstAccess);
@@ -93,13 +91,26 @@ class VersityProviderE2ETest {
         }
     }
 
+    @Test
+    void deletesAreIdempotent() {
+        VersityS3Provider provider = new VersityS3Provider();
+        String access = "idempotent-provider-user";
+        String secret = "idempotent-provider-secret";
+        String bucket = "idempotent-provider-bucket";
+        provider.createUser(endpoint, ROOT_ACCESS, ROOT_SECRET, access, secret, "user");
+        provider.createBucket(endpoint, ROOT_ACCESS, ROOT_SECRET, bucket, access);
+        provider.deleteBucket(endpoint, ROOT_ACCESS, ROOT_SECRET, bucket);
+        provider.deleteBucket(endpoint, ROOT_ACCESS, ROOT_SECRET, bucket);
+        provider.deleteUser(endpoint, ROOT_ACCESS, ROOT_SECRET, access);
+        provider.deleteUser(endpoint, ROOT_ACCESS, ROOT_SECRET, access);
+    }
+
     private S3Client s3(String access, String secret) {
         return S3Client.builder()
                 .endpointOverride(URI.create(endpoint))
                 .region(Region.US_EAST_1)
                 .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(access, secret)))
-                .serviceConfiguration(
-                        S3Configuration.builder().pathStyleAccessEnabled(true).build())
+                .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
                 .httpClientBuilder(UrlConnectionHttpClient.builder())
                 .build();
     }
@@ -107,8 +118,7 @@ class VersityProviderE2ETest {
     private static void awaitAccessible(S3Client s3, String bucket) {
         await().atMost(Duration.ofSeconds(30))
                 .ignoreExceptions()
-                .untilAsserted(() ->
-                        s3.headBucket(HeadBucketRequest.builder().bucket(bucket).build()));
+                .untilAsserted(() -> s3.headBucket(HeadBucketRequest.builder().bucket(bucket).build()));
     }
 
     private static boolean credentialsRejected(S3Client s3, String bucket) {
