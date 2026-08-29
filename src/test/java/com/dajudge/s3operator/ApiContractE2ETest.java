@@ -26,13 +26,33 @@ import software.amazon.awssdk.services.s3.S3Client;
 class ApiContractE2ETest extends OperatorE2ETestSupport {
 
     @Test
-    void generatedCrdsExposeExpectedKindsPluralsAndEnums() throws Exception {
+    void generatedCrdsExposeExpectedKindsPluralsAndSchemaMetadata() throws Exception {
         String buckets = Files.readString(Path.of("target/kubernetes/s3buckets.s3.dajudge.com-v1.yml"));
         String users = Files.readString(Path.of("target/kubernetes/s3users.s3.dajudge.com-v1.yml"));
         String backends = Files.readString(Path.of("target/kubernetes/s3backends.s3.dajudge.com-v1.yml"));
-        assertThat(buckets).contains("kind: \"S3Bucket\"", "plural: \"s3buckets\"", "\"RETAIN\"", "\"DELETE\"");
-        assertThat(users).contains("kind: \"S3User\"", "plural: \"s3users\"");
-        assertThat(backends).contains("kind: \"S3Backend\"", "plural: \"s3backends\"");
+
+        assertThat(buckets)
+                .contains(
+                        "kind: \"S3Bucket\"",
+                        "plural: \"s3buckets\"",
+                        "default: \"RETAIN\"",
+                        "Name of the S3Backend resource that manages this bucket.",
+                        "Name of the S3User resource that owns this bucket.",
+                        "\"RETAIN\"",
+                        "\"DELETE\"");
+        assertThat(users)
+                .contains(
+                        "kind: \"S3User\"",
+                        "plural: \"s3users\"",
+                        "default: \"user\"",
+                        "Name of the S3Backend resource that manages this user.");
+        assertThat(backends)
+                .contains(
+                        "kind: \"S3Backend\"",
+                        "plural: \"s3backends\"",
+                        "default: \"versity\"",
+                        "S3 endpoint URL used for administrative and bucket operations.",
+                        "Secret containing the backend administrator accessKey");
     }
 
     @Test
