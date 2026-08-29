@@ -51,6 +51,9 @@ jobs:
 
       - name: Refresh Helm CRDs
         run: |
+          test -s target/kubernetes/s3backends.s3.dajudge.com-v1.yml
+          test -s target/kubernetes/s3users.s3.dajudge.com-v1.yml
+          test -s target/kubernetes/s3buckets.s3.dajudge.com-v1.yml
           cat target/kubernetes/s3backends.s3.dajudge.com-v1.yml > charts/s3-resource-operator/crds/s3.dajudge.com.yaml
           printf '\n---\n' >> charts/s3-resource-operator/crds/s3.dajudge.com.yaml
           cat target/kubernetes/s3users.s3.dajudge.com-v1.yml >> charts/s3-resource-operator/crds/s3.dajudge.com.yaml
