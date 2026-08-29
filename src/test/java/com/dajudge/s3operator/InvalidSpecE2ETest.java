@@ -1,6 +1,7 @@
 package com.dajudge.s3operator;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
 import com.dajudge.s3operator.api.S3Backend;
@@ -8,10 +9,10 @@ import com.dajudge.s3operator.api.S3BackendSpec;
 import com.dajudge.s3operator.api.S3Bucket;
 import com.dajudge.s3operator.api.S3BucketSpec;
 import com.dajudge.s3operator.api.S3User;
-import com.dajudge.s3operator.api.S3UserSpec;
 import io.fabric8.kubernetes.api.model.Condition;
 import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
+import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
@@ -52,41 +53,39 @@ class InvalidSpecE2ETest {
     }
 
     @Test
-    void userReferencingIncompleteBackendReportsInvalidSpec() {
-        S3BackendSpec backendSpec = new S3BackendSpec();
+    void incompleteBackendIsRejectedByCrdSchema() {
         S3Backend backend = new S3Backend();
         backend.setMetadata(new ObjectMetaBuilder()
                 .withName("incomplete-backend")
                 .withNamespace(NS)
                 .build());
-        backend.setSpec(backendSpec);
-        client.resources(S3Backend.class).inNamespace(NS).resource(backend).create();
+        backend.setSpec(new S3BackendSpec());
 
-        S3UserSpec userSpec = new S3UserSpec();
-        userSpec.setBackendRef("incomplete-backend");
-        S3User user = new S3User();
-        user.setMetadata(new ObjectMetaBuilder()
-                .withName("incomplete-backend-user")
-                .withNamespace(NS)
-                .build());
-        user.setSpec(userSpec);
-        client.resources(S3User.class).inNamespace(NS).resource(user).create();
-
-        awaitUserInvalidSpec("incomplete-backend-user", "S3Backend spec.endpoint is required");
+        assertThatThrownBy(() -> client.resources(S3Backend.class)
+                        .inNamespace(NS)
+                        .resource(backend)
+                        .create())
+                .isInstanceOf(KubernetesClientException.class)
+                .hasMessageContaining("spec.adminCredentialsSecretRef: Required value")
+                .hasMessageContaining("spec.endpoint: Required value");
     }
 
     @Test
-    void bucketWithMissingReferencesReportsInvalidSpec() {
-        S3BucketSpec spec = new S3BucketSpec();
+    void bucketWithMissingReferencesIsRejectedByCrdSchema() {
         S3Bucket bucket = new S3Bucket();
         bucket.setMetadata(new ObjectMetaBuilder()
                 .withName("missing-ref-bucket")
                 .withNamespace(NS)
                 .build());
-        bucket.setSpec(spec);
-        client.resources(S3Bucket.class).inNamespace(NS).resource(bucket).create();
+        bucket.setSpec(new S3BucketSpec());
 
-        awaitBucketInvalidSpec("missing-ref-bucket", "S3Bucket spec.backendRef is required");
+        assertThatThrownBy(() -> client.resources(S3Bucket.class)
+                        .inNamespace(NS)
+                        .resource(bucket)
+                        .create())
+                .isInstanceOf(KubernetesClientException.class)
+                .hasMessageContaining("spec.backendRef: Required value")
+                .hasMessageContaining("spec.userRef: Required value");
     }
 
     private void awaitUserInvalidSpec(String name, String message) {
