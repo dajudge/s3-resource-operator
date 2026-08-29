@@ -1,0 +1,50 @@
+name: Adopt Maven Wrapper
+
+on:
+  push:
+    branches:
+      - build/add-maven-wrapper
+
+permissions:
+  contents: write
+
+jobs:
+  adopt:
+    if: github.repository == 'dajudge/s3-resource-operator'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: build/add-maven-wrapper
+          fetch-depth: 0
+
+      - name: Replace workflow Maven commands
+        shell: python
+        run: |
+          import re
+          from pathlib import Path
+
+          helper = Path('.github/workflows/tmp-adopt-mvnw.yml')
+          for path in Path('.github/workflows').glob('*.yml'):
+              if path == helper:
+                  continue
+              text = path.read_text()
+              updated = re.sub(r'(?<![\w./-])mvn(?=\s)', './mvnw', text)
+              if updated != text:
+                  path.write_text(updated)
+
+      - name: Commit wrapper adoption and remove helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/tmp-adopt-mvnw.yml
+          git add .github/workflows
+          if git diff --cached --quiet; then
+            echo 'No workflow Maven commands needed replacement' >&2
+            exit 1
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Use Maven Wrapper in workflows'
+          git push origin HEAD:build/add-maven-wrapper
