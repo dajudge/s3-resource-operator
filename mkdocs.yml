@@ -1,0 +1,19 @@
+site_name: S3 Resource Operator
+site_description: Kubernetes operator for declarative S3 users and buckets
+repo_url: https://github.com/dajudge/s3-resource-operator
+repo_name: dajudge/s3-resource-operator
+
+theme:
+  name: material
+  features:
+    - content.code.copy
+    - navigation.sections
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - API reference:
+      - CRDs: reference/crds.md

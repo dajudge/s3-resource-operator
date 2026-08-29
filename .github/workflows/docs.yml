@@ -1,0 +1,49 @@
+name: Docs
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+      - 'docs-build/**'
+      - 'mkdocs.yml'
+      - 'charts/s3-resource-operator/crds/**'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'docs-build/**'
+      - 'mkdocs.yml'
+      - 'charts/s3-resource-operator/crds/**'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Generate reference and build MkDocs site
+        run: ./mvnw --batch-mode --no-transfer-progress -f docs-build/pom.xml verify -Ddocs.update=true
+
+      - name: Verify generated reference is committed
+        run: git diff --exit-code -- docs/reference/crds.md
