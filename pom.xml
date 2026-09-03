@@ -16,21 +16,21 @@
   <properties>
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <quarkus.platform.version>3.38.3</quarkus.platform.version>
+    <quarkus.platform.version>3.39.1</quarkus.platform.version>
     <quarkus-operator-sdk.version>7.8.0</quarkus-operator-sdk.version>
     <kindcontainer.version>2.0.0</kindcontainer.version>
-    <testcontainers.version>2.0.2</testcontainers.version>
-    <aws.sdk.version>2.43.2</aws.sdk.version>
+    <testcontainers.version>2.0.5</testcontainers.version>
+    <aws.sdk.version>2.54.7</aws.sdk.version>
     <awaitility.version>4.3.0</awaitility.version>
     <mockito.version>5.23.0</mockito.version>
     <lombok.version>1.18.46</lombok.version>
-    <spotbugs-maven-plugin.version>4.10.3.0</spotbugs-maven-plugin.version>
+    <spotbugs-maven-plugin.version>4.10.4.0</spotbugs-maven-plugin.version>
     <maven-pmd-plugin.version>3.28.0</maven-pmd-plugin.version>
     <license-maven-plugin.version>2.7.1</license-maven-plugin.version>
     <jacoco-maven-plugin.version>0.8.15</jacoco-maven-plugin.version>
-    <pitest-maven.version>1.25.9</pitest-maven.version>
+    <pitest-maven.version>1.30.0</pitest-maven.version>
     <pitest-junit5-plugin.version>1.2.3</pitest-junit5-plugin.version>
-    <spotless-maven-plugin.version>3.10.0</spotless-maven-plugin.version>
+    <spotless-maven-plugin.version>3.10.1</spotless-maven-plugin.version>
     <palantir-java-format.version>2.97.0</palantir-java-format.version>
     <spotless.ratchetFrom>origin/main</spotless.ratchetFrom>
     <skipITs>true</skipITs>
@@ -95,7 +95,7 @@
     <dependency>
       <groupId>org.assertj</groupId>
       <artifactId>assertj-core</artifactId>
-      <version>3.27.6</version>
+      <version>3.27.7</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -154,7 +154,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.14.0</version>
+        <version>3.16.0</version>
         <configuration>
           <annotationProcessorPaths>
             <path>
@@ -233,7 +233,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>3.5.3</version>
+        <version>3.5.6</version>
         <configuration>
           <skipTests>${skipUnitTests}</skipTests>
           <argLine>@{argLine} -javaagent:"${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar"</argLine>
@@ -277,7 +277,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-failsafe-plugin</artifactId>
-        <version>3.5.3</version>
+        <version>3.5.6</version>
         <executions>
           <execution>
             <goals>
